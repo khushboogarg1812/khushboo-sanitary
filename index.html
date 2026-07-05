@@ -16,9 +16,7 @@
 <title>Khushboo Sanitary World</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 
 
 <style>
@@ -715,6 +713,16 @@ function buildHome(){
 }
 
 // ── STOCK ────────────────────────────────────────────────────────
+function renderStock(){
+  // Only re-render the stock items without rebuilding the whole page
+  const itemsEl = document.getElementById('stockItems');
+  if(!itemsEl){render();return;}
+  const input = document.getElementById('stockSearchInput');
+  const curPos = input ? input.selectionStart : 0;
+  buildStockItems();
+  if(input){input.focus();input.setSelectionRange(curPos,curPos);}
+}
+
 function buildStock(){
   // If ALL selected, show location summary cards instead of full tables
   if(curLoc==='all'){
@@ -767,7 +775,7 @@ function buildStock(){
 
   // Search bar
   h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;render()"/></div>
+    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;renderStock()" id="stockSearchInput"/></div>
     ${stockSearch?`<button class="btn red" onclick="stockSearch='';render()" style="flex-shrink:0"><i class="fa-solid fa-xmark"></i> Clear</button>`:''}
   </div>`;
 
@@ -797,6 +805,7 @@ function buildStock(){
   });
   h+=`</div>`;
 
+  h+=`<div id="stockItems">`;
   lks.forEach(k=>{
     let items=sortItems(data[k]);
     if(stockBrand!=='All') items=items.filter(i=>i.brand===stockBrand);
@@ -1404,9 +1413,11 @@ function doTransfer(){
 
 function editItem(loc,id){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
-  const cp=parseFloat(prompt(`New cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
+  const newName=prompt(`Item name:\n(current: ${item.name})`,item.name);
+  if(newName&&newName.trim()) item.name=newName.trim();
+  const cp=parseFloat(prompt(`Cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
   if(!isNaN(cp)&&cp>=0) item.cp=cp;
-  const mn=parseInt(prompt(`New min alert qty for "${item.name}"\nCurrent: ${item.min}`));
+  const mn=parseInt(prompt(`Min alert qty for "${item.name}"\nCurrent: ${item.min}`));
   if(!isNaN(mn)&&mn>=0) item.min=mn;
   autoSave();render();
 }
@@ -1819,7 +1830,7 @@ function pushToFirebase(){
       firebaseConnected=false;updateSyncStatus('error');
       try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
     });
-  },1500);
+  },3000);
 }
 
 function saveData(silent){
@@ -1856,7 +1867,7 @@ function loadFromFirebase(){
     }
   }).catch(e=>{
     firebaseConnected=false;updateSyncStatus('offline');
-    toast('Working offline','warn');
+    updateSyncStatus('offline');
   });
 }
 
