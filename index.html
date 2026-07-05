@@ -2,9 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Khushboo Sanitary"/>
+<meta name="application-name" content="Khushboo Sanitary"/>
+<meta name="theme-color" content="#1A5FA8"/>
+
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Khushboo%20Sanitary%20World%22%2C%22short_name%22%3A%22KSW%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231A5FA8%22%2C%22theme_color%22%3A%221A5FA8%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22icon.svg%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D"/>
+<link rel="apple-touch-icon" href="icon.svg"/>
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Khushboo Sanitary World</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+
 <style>
 :root{
   --bg:#F5F3EE;--surface:#FFFFFF;--surface2:#EDEBE4;
@@ -262,6 +278,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   </div>
   <div class="hbtns">
     <button class="hbtn" onclick="changePIN()"><i class="fa-solid fa-lock"></i><span>PIN</span></button>
+    <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
     <button class="hbtn" onclick="saveData()"><i class="fa-solid fa-floppy-disk"></i><span>Save</span></button>
     <button class="hbtn" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
   </div>
@@ -286,10 +303,19 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <button class="nb" onclick="setPage('reports')" id="nb-reports"><i class="fa-solid fa-file-lines"></i>Reports</button>
   <button class="nb" onclick="setPage('analytics')" id="nb-analytics"><i class="fa-solid fa-magnifying-glass-chart"></i>Analytics</button>
   <button class="nb" onclick="setPage('log')" id="nb-log"><i class="fa-solid fa-clock-rotate-left"></i>Log</button>
+  <button class="nb" onclick="setPage('import')" id="nb-import"><i class="fa-solid fa-file-import"></i>Import</button>
+  <button class="nb" onclick="setPage('settings')" id="nb-settings"><i class="fa-solid fa-gear"></i>Settings</button>
 </div>
 
 <div class="body" id="body"></div>
 <div class="toast-wrap" id="tw"></div>
+
+<!-- PWA Install Banner -->
+<div id="installBanner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1A5FA8;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9998;box-shadow:0 4px 16px rgba(0,0,0,0.3);display:flex;align-items:center;gap:10px;cursor:pointer" onclick="installApp()">
+  <span>🪠</span> Add to Home Screen as App
+  <button onclick="event.stopPropagation();document.getElementById('installBanner').style.display='none'" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>
+</div>
+
 
 <script>
 const LOCS={shop:{name:'Shop',dot:'#1A5FA8'},g1:{name:'Godown 1',dot:'#27650C'},g2:{name:'Godown 2',dot:'#7B4700'},g3:{name:'Godown 3',dot:'#3E339A'},g4:{name:'Godown 4',dot:'#0B5E52'}};
@@ -319,7 +345,7 @@ const DEF={
     {id:9,name:'PVC Elbow 1" ',cat:'Fittings',brand:'PVC',qty:13,min:5,cp:0,purchased:13,revenue:0,sold:0,lastSoldDays:0},
     {id:10,name:'PVC Elbow ½"',cat:'Fittings',brand:'PVC',qty:200,min:30,cp:0,purchased:200,revenue:0,sold:0,lastSoldDays:0},
     {id:11,name:'PVC Elbow 4" 6kg',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
-    {id:12,name:'PVC Socket 6" 4kg',cat:'Fittings',brand:'PVC',qty:29,min:5,cp:0,purchased:29,revenue:0,sold:0,lastSoldDays:0},
+    {id:12,name:'PVC Socket 6" 4kg',cat:'Fittings',brand:'PVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
     {id:13,name:'PVC Socket 5" 4kg',cat:'Fittings',brand:'PVC',qty:2,min:2,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
     {id:14,name:'PVC Socket 4" 4kg',cat:'Fittings',brand:'PVC',qty:60,min:10,cp:0,purchased:60,revenue:0,sold:0,lastSoldDays:0},
     {id:15,name:'PVC Socket 3" 4kg',cat:'Fittings',brand:'PVC',qty:22,min:5,cp:0,purchased:22,revenue:0,sold:0,lastSoldDays:0},
@@ -361,7 +387,7 @@ const DEF={
     {id:52,name:'PVC Cross Tee 3"',cat:'Fittings',brand:'PVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
     {id:53,name:'PVC Bush 4×3"',cat:'Fittings',brand:'PVC',qty:26,min:5,cp:0,purchased:26,revenue:0,sold:0,lastSoldDays:0},
     {id:54,name:'PVC Reducer 4×3"',cat:'Fittings',brand:'PVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
-    {id:55,name:'PVC Cap 4"',cat:'Fittings',brand:'PVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:55,name:'PVC Cap 4"',cat:'Fittings',brand:'PVC',qty:18,min:3,cp:0,purchased:18,revenue:0,sold:0,lastSoldDays:0},
     {id:56,name:'PVC Cowl 4"',cat:'Fittings',brand:'PVC',qty:20,min:5,cp:0,purchased:20,revenue:0,sold:0,lastSoldDays:0},
     {id:57,name:'PVC Cowl 3"',cat:'Fittings',brand:'PVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
     {id:58,name:'PVC Door Elbow 2½"',cat:'Fittings',brand:'PVC',qty:11,min:3,cp:0,purchased:11,revenue:0,sold:0,lastSoldDays:0},
@@ -391,14 +417,166 @@ const DEF={
     {id:85,name:'PVC N-Trap 2" 6kg',cat:'Fittings',brand:'PVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
     {id:86,name:'PVC N-Trap 4" 6kg',cat:'Fittings',brand:'PVC',qty:19,min:5,cp:0,purchased:19,revenue:0,sold:0,lastSoldDays:0},
     {id:87,name:'PVC Reducer 4×2½" 6kg',cat:'Fittings',brand:'PVC',qty:24,min:5,cp:0,purchased:24,revenue:0,sold:0,lastSoldDays:0},
+    {id:88,name:'PVC Y-Tee 3½\"',cat:'Fittings',brand:'PVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:89,name:'PVC Bush 3×4\"',cat:'Fittings',brand:'PVC',qty:36,min:5,cp:0,purchased:36,revenue:0,sold:0,lastSoldDays:0},
+    {id:90,name:'PVC Tee 6\"',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:91,name:'PVC Socket 8\" 4kg',cat:'Fittings',brand:'PVC',qty:3,min:2,cp:0,purchased:3,revenue:0,sold:0,lastSoldDays:0},
+    {id:92,name:'PVC Socket 6\" 6kg',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:93,name:'PVC Socket 8\" 6kg',cat:'Fittings',brand:'PVC',qty:3,min:2,cp:0,purchased:3,revenue:0,sold:0,lastSoldDays:0},
+    {id:94,name:'PVC Socket 5\" 6kg',cat:'Fittings',brand:'PVC',qty:2,min:2,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:95,name:'PVC Reducer 5×4\"',cat:'Fittings',brand:'PVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:96,name:'PVC Reducer 6×4\"',cat:'Fittings',brand:'PVC',qty:2,min:2,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:97,name:'PVC Bush 6×4\"',cat:'Fittings',brand:'PVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:98,name:'PVC Bush 5×4\"',cat:'Fittings',brand:'PVC',qty:2,min:2,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:99,name:'PVC Reducer 6×4 Elbow',cat:'Fittings',brand:'PVC',qty:2,min:2,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:100,name:'PVC Cowl 6\"',cat:'Fittings',brand:'PVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:101,name:'PVC Door Elbow 6\"',cat:'Fittings',brand:'PVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:102,name:'PVC Union 2\"',cat:'Fittings',brand:'PVC',qty:8,min:3,cp:0,purchased:8,revenue:0,sold:0,lastSoldDays:0},
+    {id:103,name:'PVC Y-Tee 6\" 4kg',cat:'Fittings',brand:'PVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:104,name:'PVC Union 1½\"',cat:'Fittings',brand:'PVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:105,name:'PVC Union 1¼\"',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:106,name:'PVC Union 32mm',cat:'Fittings',brand:'PVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:107,name:'PVC Union 25mm',cat:'Fittings',brand:'PVC',qty:2,min:1,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:108,name:'PVC FTA 4\"',cat:'Fittings',brand:'PVC',qty:20,min:5,cp:0,purchased:20,revenue:0,sold:0,lastSoldDays:0},
+    {id:109,name:'PVC FTA 3\"',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:110,name:'PVC FTA 2½\"',cat:'Fittings',brand:'PVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:111,name:'PVC FTA 2\"',cat:'Fittings',brand:'PVC',qty:16,min:5,cp:0,purchased:16,revenue:0,sold:0,lastSoldDays:0},
+    {id:112,name:'PVC FTA 1½\"',cat:'Fittings',brand:'PVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:113,name:'PVC FTA 1¼\"',cat:'Fittings',brand:'PVC',qty:3,min:2,cp:0,purchased:3,revenue:0,sold:0,lastSoldDays:0},
+    {id:114,name:'PVC MTA 2\"',cat:'Fittings',brand:'PVC',qty:8,min:3,cp:0,purchased:8,revenue:0,sold:0,lastSoldDays:0},
+    {id:115,name:'PVC MTA 1¼\"',cat:'Fittings',brand:'PVC',qty:25,min:5,cp:0,purchased:25,revenue:0,sold:0,lastSoldDays:0},
+    {id:116,name:'PVC MTA 4\"',cat:'Fittings',brand:'PVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
+    {id:117,name:'CPVC Bypass Band 1\"',cat:'Fittings',brand:'CPVC',qty:60,min:10,cp:0,purchased:60,revenue:0,sold:0,lastSoldDays:0},
+    {id:118,name:'CPVC Bypass Band ¾\"',cat:'Fittings',brand:'CPVC',qty:25,min:5,cp:0,purchased:25,revenue:0,sold:0,lastSoldDays:0},
+    {id:119,name:'CPVC Elbow 80mm',cat:'Fittings',brand:'CPVC',qty:4,min:2,cp:0,purchased:4,revenue:0,sold:0,lastSoldDays:0},
+    {id:120,name:'CPVC Elbow 100mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:121,name:'CPVC Socket 80mm',cat:'Fittings',brand:'CPVC',qty:2,min:1,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:122,name:'CPVC Socket 100mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:123,name:'CPVC Bush 80×50mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:124,name:'CPVC Tee 80×25mm',cat:'Fittings',brand:'CPVC',qty:3,min:2,cp:0,purchased:3,revenue:0,sold:0,lastSoldDays:0},
+    {id:125,name:'CPVC MTA 63mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:126,name:'CPVC Socket 63mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:127,name:'CPVC Union 80mm',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:128,name:'Brass CPVC MTA 1\"',cat:'Fittings',brand:'Brass CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:129,name:'Brass CPVC MTA 2\"',cat:'Fittings',brand:'Brass CPVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:130,name:'Brass CPVC MTA 1½\"',cat:'Fittings',brand:'Brass CPVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
+    {id:131,name:'Brass CPVC MTA ¾\"',cat:'Fittings',brand:'Brass CPVC',qty:38,min:5,cp:0,purchased:38,revenue:0,sold:0,lastSoldDays:0},
+    {id:132,name:'CPVC Socket ¾\"',cat:'Fittings',brand:'CPVC',qty:600,min:50,cp:0,purchased:600,revenue:0,sold:0,lastSoldDays:0},
+    {id:133,name:'CPVC Socket ½\"',cat:'Fittings',brand:'CPVC',qty:55,min:10,cp:0,purchased:55,revenue:0,sold:0,lastSoldDays:0},
+    {id:134,name:'CPVC Socket 1¼\"',cat:'Fittings',brand:'CPVC',qty:160,min:20,cp:0,purchased:160,revenue:0,sold:0,lastSoldDays:0},
+    {id:135,name:'CPVC Socket 2\"',cat:'Fittings',brand:'CPVC',qty:20,min:5,cp:0,purchased:20,revenue:0,sold:0,lastSoldDays:0},
+    {id:136,name:'CPVC Brass MTA 2\"',cat:'Fittings',brand:'Brass CPVC',qty:8,min:3,cp:0,purchased:8,revenue:0,sold:0,lastSoldDays:0},
+    {id:137,name:'CPVC Brass MTA 1½\"',cat:'Fittings',brand:'Brass CPVC',qty:12,min:3,cp:0,purchased:12,revenue:0,sold:0,lastSoldDays:0},
+    {id:138,name:'CPVC Brass FTA 1½\"',cat:'Fittings',brand:'Brass CPVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:139,name:'CPVC Brass Tee ¾×½\"',cat:'Fittings',brand:'Brass CPVC',qty:290,min:30,cp:0,purchased:290,revenue:0,sold:0,lastSoldDays:0},
+    {id:140,name:'CPVC Brass Tee ½×½\"',cat:'Fittings',brand:'Brass CPVC',qty:100,min:10,cp:0,purchased:100,revenue:0,sold:0,lastSoldDays:0},
+    {id:141,name:'CPVC Brass Elbow ¾×½\"',cat:'Fittings',brand:'Brass CPVC',qty:400,min:40,cp:0,purchased:400,revenue:0,sold:0,lastSoldDays:0},
+    {id:142,name:'CPVC Brass FTA 1×¾\"',cat:'Fittings',brand:'Brass CPVC',qty:120,min:15,cp:0,purchased:120,revenue:0,sold:0,lastSoldDays:0},
+    {id:143,name:'CPVC Brass Elbow ½×½\"',cat:'Fittings',brand:'Brass CPVC',qty:60,min:10,cp:0,purchased:60,revenue:0,sold:0,lastSoldDays:0},
+    {id:144,name:'CPVC Brass FTA 1¼\"',cat:'Fittings',brand:'Brass CPVC',qty:12,min:3,cp:0,purchased:12,revenue:0,sold:0,lastSoldDays:0},
+    {id:145,name:'CPVC Brass FTA ½\"',cat:'Fittings',brand:'Brass CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:146,name:'CPVC Brass FTA 2\"',cat:'Fittings',brand:'Brass CPVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:147,name:'CPVC Brass MTA ¾×½\"',cat:'Fittings',brand:'Brass CPVC',qty:125,min:15,cp:0,purchased:125,revenue:0,sold:0,lastSoldDays:0},
+    {id:148,name:'CPVC Brass MTA ½\"',cat:'Fittings',brand:'Brass CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:149,name:'CPVC Brass FTA ¾\"',cat:'Fittings',brand:'Brass CPVC',qty:80,min:10,cp:0,purchased:80,revenue:0,sold:0,lastSoldDays:0},
+    {id:150,name:'CPVC Brass FTA ¾×½\"',cat:'Fittings',brand:'Brass CPVC',qty:160,min:20,cp:0,purchased:160,revenue:0,sold:0,lastSoldDays:0},
+    {id:151,name:'CPVC T Nipple 1\"',cat:'Fittings',brand:'CPVC',qty:25,min:5,cp:0,purchased:25,revenue:0,sold:0,lastSoldDays:0},
+    {id:152,name:'CPVC T Nipple ¾\"',cat:'Fittings',brand:'CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:153,name:'CPVC Tee 1½\"',cat:'Fittings',brand:'CPVC',qty:120,min:20,cp:0,purchased:120,revenue:0,sold:0,lastSoldDays:0},
+    {id:154,name:'CPVC Tee ¾\"',cat:'Fittings',brand:'CPVC',qty:600,min:50,cp:0,purchased:600,revenue:0,sold:0,lastSoldDays:0},
+    {id:155,name:'CPVC Tee 1¼\"',cat:'Fittings',brand:'CPVC',qty:80,min:15,cp:0,purchased:80,revenue:0,sold:0,lastSoldDays:0},
+    {id:156,name:'CPVC Tee 1\"',cat:'Fittings',brand:'CPVC',qty:300,min:30,cp:0,purchased:300,revenue:0,sold:0,lastSoldDays:0},
+    {id:157,name:'CPVC Tee ½\"',cat:'Fittings',brand:'CPVC',qty:650,min:50,cp:0,purchased:650,revenue:0,sold:0,lastSoldDays:0},
+    {id:158,name:'CPVC Elbow 1\"',cat:'Fittings',brand:'CPVC',qty:300,min:30,cp:0,purchased:300,revenue:0,sold:0,lastSoldDays:0},
+    {id:159,name:'CPVC Elbow ¾\"',cat:'Fittings',brand:'CPVC',qty:700,min:50,cp:0,purchased:700,revenue:0,sold:0,lastSoldDays:0},
+    {id:160,name:'CPVC Elbow ½\"',cat:'Fittings',brand:'CPVC',qty:350,min:30,cp:0,purchased:350,revenue:0,sold:0,lastSoldDays:0},
+    {id:161,name:'CPVC Elbow 1½\"',cat:'Fittings',brand:'CPVC',qty:25,min:5,cp:0,purchased:25,revenue:0,sold:0,lastSoldDays:0},
+    {id:162,name:'CPVC Elbow 2\"',cat:'Fittings',brand:'CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:163,name:'CPVC Half Band ½\"',cat:'Fittings',brand:'CPVC',qty:210,min:20,cp:0,purchased:210,revenue:0,sold:0,lastSoldDays:0},
+    {id:164,name:'CPVC Half Band 1\"',cat:'Fittings',brand:'CPVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
+    {id:165,name:'CPVC Half Band ¾\"',cat:'Fittings',brand:'CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:166,name:'CPVC Plastic MTA 1¼\"',cat:'Fittings',brand:'CPVC',qty:60,min:10,cp:0,purchased:60,revenue:0,sold:0,lastSoldDays:0},
+    {id:167,name:'CPVC Plastic MTA 2\"',cat:'Fittings',brand:'CPVC',qty:32,min:5,cp:0,purchased:32,revenue:0,sold:0,lastSoldDays:0},
+    {id:168,name:'CPVC Plastic MTA ¾\"',cat:'Fittings',brand:'CPVC',qty:200,min:20,cp:0,purchased:200,revenue:0,sold:0,lastSoldDays:0},
+    {id:169,name:'CPVC Plastic MTA 1\"',cat:'Fittings',brand:'CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:170,name:'CPVC Plastic MTA 1½\"',cat:'Fittings',brand:'CPVC',qty:70,min:10,cp:0,purchased:70,revenue:0,sold:0,lastSoldDays:0},
+    {id:171,name:'CPVC Union 1¼\"',cat:'Fittings',brand:'CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:172,name:'CPVC Union ¾\"',cat:'Fittings',brand:'CPVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
+    {id:173,name:'CPVC Union 1\"',cat:'Fittings',brand:'CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:174,name:'CPVC Union ½\"',cat:'Fittings',brand:'CPVC',qty:55,min:10,cp:0,purchased:55,revenue:0,sold:0,lastSoldDays:0},
+    {id:175,name:'CPVC Union 2\"',cat:'Fittings',brand:'CPVC',qty:15,min:5,cp:0,purchased:15,revenue:0,sold:0,lastSoldDays:0},
+    {id:176,name:'CPVC Ball Valve 2\"',cat:'Fittings',brand:'CPVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:177,name:'CPVC Ball Valve ½\"',cat:'Fittings',brand:'CPVC',qty:102,min:10,cp:0,purchased:102,revenue:0,sold:0,lastSoldDays:0},
+    {id:178,name:'CPVC Ball Valve 1¼\"',cat:'Fittings',brand:'CPVC',qty:6,min:2,cp:0,purchased:6,revenue:0,sold:0,lastSoldDays:0},
+    {id:179,name:'CPVC Ball Valve ¾\"',cat:'Fittings',brand:'CPVC',qty:51,min:10,cp:0,purchased:51,revenue:0,sold:0,lastSoldDays:0},
+    {id:180,name:'CPVC Ball Valve 1\"',cat:'Fittings',brand:'CPVC',qty:20,min:5,cp:0,purchased:20,revenue:0,sold:0,lastSoldDays:0},
+    {id:181,name:'CPVC Ball Valve 2½\"',cat:'Fittings',brand:'CPVC',qty:11,min:3,cp:0,purchased:11,revenue:0,sold:0,lastSoldDays:0},
+    {id:182,name:'CPVC Ball Valve 3\"',cat:'Fittings',brand:'CPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:183,name:'CPVC Reducer Elbow 1½×¾\"',cat:'Fittings',brand:'CPVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
+    {id:184,name:'CPVC Reducer Elbow 1¼×1\"',cat:'Fittings',brand:'CPVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
+    {id:185,name:'CPVC Reducer Elbow 1×¾\"',cat:'Fittings',brand:'CPVC',qty:57,min:10,cp:0,purchased:57,revenue:0,sold:0,lastSoldDays:0},
+    {id:186,name:'CPVC Reducer Elbow ¾×½\"',cat:'Fittings',brand:'CPVC',qty:200,min:20,cp:0,purchased:200,revenue:0,sold:0,lastSoldDays:0},
+    {id:187,name:'CPVC End Cap ½\"',cat:'Fittings',brand:'CPVC',qty:850,min:50,cp:0,purchased:850,revenue:0,sold:0,lastSoldDays:0},
+    {id:188,name:'CPVC End Cap 1¼\"',cat:'Fittings',brand:'CPVC',qty:120,min:20,cp:0,purchased:120,revenue:0,sold:0,lastSoldDays:0},
+    {id:189,name:'CPVC End Cap 1\"',cat:'Fittings',brand:'CPVC',qty:430,min:40,cp:0,purchased:430,revenue:0,sold:0,lastSoldDays:0},
+    {id:190,name:'CPVC End Cap ¾\"',cat:'Fittings',brand:'CPVC',qty:400,min:40,cp:0,purchased:400,revenue:0,sold:0,lastSoldDays:0},
+    {id:191,name:'CPVC End Cap 1½\"',cat:'Fittings',brand:'CPVC',qty:80,min:10,cp:0,purchased:80,revenue:0,sold:0,lastSoldDays:0},
+    {id:192,name:'CPVC Plastic FTA 1\"',cat:'Fittings',brand:'CPVC',qty:240,min:25,cp:0,purchased:240,revenue:0,sold:0,lastSoldDays:0},
+    {id:193,name:'CPVC Plastic FTA 1½\"',cat:'Fittings',brand:'CPVC',qty:32,min:5,cp:0,purchased:32,revenue:0,sold:0,lastSoldDays:0},
+    {id:194,name:'CPVC Plastic FTA 2\"',cat:'Fittings',brand:'CPVC',qty:10,min:3,cp:0,purchased:10,revenue:0,sold:0,lastSoldDays:0},
+    {id:195,name:'CPVC Plastic FTA 1¼\"',cat:'Fittings',brand:'CPVC',qty:20,min:5,cp:0,purchased:20,revenue:0,sold:0,lastSoldDays:0},
+    {id:196,name:'CPVC Plastic FTA ¾\"',cat:'Fittings',brand:'CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:197,name:'CPVC Reducer 1¼×1\"',cat:'Fittings',brand:'CPVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
+    {id:198,name:'CPVC Reducer 1½×1¼\"',cat:'Fittings',brand:'CPVC',qty:18,min:5,cp:0,purchased:18,revenue:0,sold:0,lastSoldDays:0},
+    {id:199,name:'CPVC Reducer ¾×½\"',cat:'Fittings',brand:'CPVC',qty:375,min:30,cp:0,purchased:375,revenue:0,sold:0,lastSoldDays:0},
+    {id:200,name:'CPVC Reducer ½×1\"',cat:'Fittings',brand:'CPVC',qty:50,min:10,cp:0,purchased:50,revenue:0,sold:0,lastSoldDays:0},
+    {id:201,name:'CPVC Reducer 1½×¾\"',cat:'Fittings',brand:'CPVC',qty:60,min:10,cp:0,purchased:60,revenue:0,sold:0,lastSoldDays:0},
+    {id:202,name:'CPVC Reducer 2×1½\"',cat:'Fittings',brand:'CPVC',qty:13,min:3,cp:0,purchased:13,revenue:0,sold:0,lastSoldDays:0},
+    {id:203,name:'CPVC Reducer 2×1¼\"',cat:'Fittings',brand:'CPVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:204,name:'CPVC Reducer Tee ¾×½\"',cat:'Fittings',brand:'CPVC',qty:140,min:20,cp:0,purchased:140,revenue:0,sold:0,lastSoldDays:0},
+    {id:205,name:'CPVC Reducer Tee 2×¾\"',cat:'Fittings',brand:'CPVC',qty:16,min:5,cp:0,purchased:16,revenue:0,sold:0,lastSoldDays:0},
+    {id:206,name:'CPVC Reducer Tee 1¼×1\"',cat:'Fittings',brand:'CPVC',qty:75,min:10,cp:0,purchased:75,revenue:0,sold:0,lastSoldDays:0},
+    {id:207,name:'CPVC Reducer Tee 1½×¾\"',cat:'Fittings',brand:'CPVC',qty:45,min:10,cp:0,purchased:45,revenue:0,sold:0,lastSoldDays:0},
+    {id:208,name:'CPVC Reducer Tee 2×1\"',cat:'Fittings',brand:'CPVC',qty:57,min:10,cp:0,purchased:57,revenue:0,sold:0,lastSoldDays:0},
+    {id:209,name:'CPVC Reducer Tee ½×1\"',cat:'Fittings',brand:'CPVC',qty:5,min:2,cp:0,purchased:5,revenue:0,sold:0,lastSoldDays:0},
+    {id:210,name:'CPVC Reducer Tee 2×1¼\"',cat:'Fittings',brand:'CPVC',qty:3,min:2,cp:0,purchased:3,revenue:0,sold:0,lastSoldDays:0},
+    {id:211,name:'CPVC Reducer Tee 1¼×¾\"',cat:'Fittings',brand:'CPVC',qty:11,min:3,cp:0,purchased:11,revenue:0,sold:0,lastSoldDays:0},
+    {id:212,name:'CPVC Bush 1×¾\"',cat:'Fittings',brand:'CPVC',qty:475,min:40,cp:0,purchased:475,revenue:0,sold:0,lastSoldDays:0},
+    {id:213,name:'CPVC Bush 1¼×1\"',cat:'Fittings',brand:'CPVC',qty:310,min:30,cp:0,purchased:310,revenue:0,sold:0,lastSoldDays:0},
+    {id:214,name:'CPVC Bush ½×¾\"',cat:'Fittings',brand:'CPVC',qty:130,min:15,cp:0,purchased:130,revenue:0,sold:0,lastSoldDays:0},
+    {id:215,name:'CPVC Bush 2×1½\"',cat:'Fittings',brand:'CPVC',qty:32,min:5,cp:0,purchased:32,revenue:0,sold:0,lastSoldDays:0},
+    {id:216,name:'CPVC Bush 2×1¼\"',cat:'Fittings',brand:'CPVC',qty:22,min:5,cp:0,purchased:22,revenue:0,sold:0,lastSoldDays:0},
+    {id:217,name:'CPVC Bush 2×1\"',cat:'Fittings',brand:'CPVC',qty:74,min:10,cp:0,purchased:74,revenue:0,sold:0,lastSoldDays:0},
+    {id:218,name:'CPVC Bush ½×1¼\"',cat:'Fittings',brand:'CPVC',qty:65,min:10,cp:0,purchased:65,revenue:0,sold:0,lastSoldDays:0},
+    {id:219,name:'CPVC Bush 1½×1\"',cat:'Fittings',brand:'CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:220,name:'CPVC Bush 1¼×¾\"',cat:'Fittings',brand:'CPVC',qty:30,min:5,cp:0,purchased:30,revenue:0,sold:0,lastSoldDays:0},
+    {id:221,name:'CPVC T Bush ¾×4\"',cat:'Fittings',brand:'CPVC',qty:150,min:15,cp:0,purchased:150,revenue:0,sold:0,lastSoldDays:0},
+    {id:222,name:'CPVC T Bush ½\"',cat:'Fittings',brand:'CPVC',qty:150,min:15,cp:0,purchased:150,revenue:0,sold:0,lastSoldDays:0},
+    {id:223,name:'Long Band',cat:'Accessories',brand:'PVC',qty:13,min:3,cp:0,purchased:13,revenue:0,sold:0,lastSoldDays:0},
+    {id:224,name:'M-Seal CPVC Solvent 250gm',cat:'Accessories',brand:'M-Seal',qty:62,min:10,cp:0,purchased:62,revenue:0,sold:0,lastSoldDays:0},
+    {id:225,name:'UPVC Solvent 100gm',cat:'Accessories',brand:'UPVC',qty:9,min:3,cp:0,purchased:9,revenue:0,sold:0,lastSoldDays:0},
+    {id:226,name:'UPVC Solvent 250gm',cat:'Accessories',brand:'UPVC',qty:1,min:1,cp:0,purchased:1,revenue:0,sold:0,lastSoldDays:0},
+    {id:227,name:'Estal CPVC Solvent 100gm',cat:'Accessories',brand:'Estal',qty:2,min:1,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+    {id:228,name:'PVC Solvent 50gm',cat:'Accessories',brand:'PVC',qty:22,min:5,cp:0,purchased:22,revenue:0,sold:0,lastSoldDays:0},
+    {id:229,name:'CPVC Solvent 50gm',cat:'Accessories',brand:'CPVC',qty:32,min:5,cp:0,purchased:32,revenue:0,sold:0,lastSoldDays:0},
+    {id:230,name:'CPVC Solvent 500gm',cat:'Accessories',brand:'CPVC',qty:14,min:3,cp:0,purchased:14,revenue:0,sold:0,lastSoldDays:0},
+    {id:231,name:'PVC Solvent 1L',cat:'Accessories',brand:'PVC',qty:24,min:5,cp:0,purchased:24,revenue:0,sold:0,lastSoldDays:0},
+    {id:232,name:'PVC Solvent 500gm',cat:'Accessories',brand:'PVC',qty:21,min:5,cp:0,purchased:21,revenue:0,sold:0,lastSoldDays:0},
+    {id:233,name:'PVC Solvent 250gm',cat:'Accessories',brand:'PVC',qty:40,min:10,cp:0,purchased:40,revenue:0,sold:0,lastSoldDays:0},
+    {id:234,name:'PVC Solvent 100gm',cat:'Accessories',brand:'PVC',qty:82,min:10,cp:0,purchased:82,revenue:0,sold:0,lastSoldDays:0},
+    {id:235,name:'CPVC Solvent 100gm',cat:'Accessories',brand:'CPVC',qty:17,min:5,cp:0,purchased:17,revenue:0,sold:0,lastSoldDays:0},
+    {id:236,name:'CPVC Solvent 250gm',cat:'Accessories',brand:'CPVC',qty:24,min:5,cp:0,purchased:24,revenue:0,sold:0,lastSoldDays:0},
+    {id:237,name:'PVC Flench Clamp 4\"',cat:'Fittings',brand:'PVC',qty:4,min:2,cp:0,purchased:4,revenue:0,sold:0,lastSoldDays:0},
+    {id:238,name:'UPVC Flench Clamp 4\"',cat:'Fittings',brand:'UPVC',qty:2,min:1,cp:0,purchased:2,revenue:0,sold:0,lastSoldDays:0},
+  {id:239,name:'Gray Grout',cat:'Cement',brand:'Generic',qty:25,min:5,cp:0,purchased:25,revenue:0,sold:0,lastSoldDays:0},
   ],
   g2:[],
   g3:[],
   g4:[],
 };
 
-let data,txLog=[],history={weekly:{},monthly:{},quarterly:{},yearly:{}},nid={shop:20,g1:20,g2:20,g3:20,g4:20};
-let curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,curMonthCount=1,stockFilter='All',stockSearch='';
+let data,txLog=[],history={weekly:{},monthly:{},quarterly:{},yearly:{}},nid={shop:20,g1:20,g2:20,g3:20,g4:20},settings={globalMinAlert:5,showZeroAlert:true,showLowAlert:true,shopName:'Khushboo Sanitary World'};
+let curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,curMonthCount=1,stockFilter='All',stockSearch='',stockBrand='All';
 
 (function(){
   try{
@@ -454,8 +632,8 @@ function toast(msg,type){
   w.appendChild(d);setTimeout(()=>d.remove(),3000);
 }
 
-const st=i=>{if(i.qty===0||i.qty<=i.min*0.5)return'crit';if(i.qty<=i.min)return'low';return'ok';};
-const sortItems=items=>[...items].sort((a,b)=>{const o={crit:0,low:1,ok:2};return o[st(a)]-o[st(b)];});
+const st=i=>{if(i.qty===0)return settings.showZeroAlert?'zero':'ok';if(i.qty<=Math.max(i.min,settings.globalMinAlert)*0.5)return'crit';if(i.qty<=Math.max(i.min,settings.globalMinAlert))return'low';return'ok';};
+const sortItems=items=>[...items].sort((a,b)=>{const o={zero:0,crit:1,low:2,ok:3};return o[st(a)]-o[st(b)];});
 
 function setLoc(l){
   curLoc=l;
@@ -487,6 +665,8 @@ function render(){
   else if(curPage==='transfer') b.innerHTML=buildTransfer();
   else if(curPage==='reports') b.innerHTML=buildReports();
   else if(curPage==='analytics') b.innerHTML=buildAnalytics();
+  else if(curPage==='settings') b.innerHTML=buildSettings();
+  else if(curPage==='import') b.innerHTML=buildImport();
   else if(curPage==='log') b.innerHTML=buildLog();
 }
 
@@ -536,25 +716,92 @@ function buildHome(){
 
 // ── STOCK ────────────────────────────────────────────────────────
 function buildStock(){
-  const lks=curLoc==='all'?LKS:[curLoc];
+  // If ALL selected, show location summary cards instead of full tables
+  if(curLoc==='all'){
+    let h=`<div class="stitle">📦 Stock Inventory</div><div class="ssub">Select a location to view and manage items</div>`;
+    h+=`<div class="alert info" style="margin-bottom:14px"><i class="fa-solid fa-circle-info"></i>Click on any location below to view its full inventory.</div>`;
+    LKS.forEach(k=>{
+      const items=data[k];
+      const sorted=sortItems(items);
+      const low=items.filter(i=>st(i)!=='ok').length;
+      const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
+      h+=`<div class="card" style="cursor:pointer" onclick="setLoc('${k}')">
+        <div class="ctitle" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span><span style="width:10px;height:10px;border-radius:50%;background:${LOCS[k].dot};display:inline-block;margin-right:7px;vertical-align:middle"></span>${LOCS[k].name}</span>
+          <span style="font-size:12px;color:var(--text2);font-weight:400">${items.length} items &nbsp;|&nbsp; Value: <b style="color:var(--blue)">${fmt(sv)}</b> &nbsp;|&nbsp; Alerts: <b style="color:${low>0?'var(--amber)':'var(--green)'}">${low}</b></span>
+        </div>`;
+      // Show only critical/low items
+      const alerts=sorted.filter(i=>st(i)!=='ok').slice(0,5);
+      if(alerts.length){
+        h+=`<div style="margin-bottom:8px">`;
+        alerts.forEach(i=>{const s=st(i);h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}" style="padding:8px 12px;margin-bottom:6px"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><b>${i.name}</b> — ${s==='zero'?'Out of Stock':i.qty+' left'}</div>`;});
+        h+=`</div>`;
+      } else {
+        h+=`<div class="alert ok" style="margin-bottom:8px"><i class="fa-solid fa-circle-check"></i>All items stocked well</div>`;
+      }
+      h+=`<button class="btn primary" onclick="setLoc('${k}')"><i class="fa-solid fa-boxes-stacked"></i> View Full Inventory</button>
+      </div>`;
+    });
+    document.getElementById('body').innerHTML=h;
+    return;
+  }
+  const lks=[curLoc];
 
-  // Gather all unique item name keywords for filter pills
-  const keywords=['All','Elbow','Socket','Tee','Y-Tee','Band','Ball','P-Trap','Pipe','Valve','Trap','Union'];
+  // Gather all items for filter generation
+  const allLksForFilter=curLoc==='all'?LKS:[curLoc];
+  const brandSet=new Set(['All']);
+  const typeOrder=['All','Elbow','Socket','Tee','Y-Tee','Band','Ball','P-Trap','Trap','Union','Bush','Reducer','Cap','Cowl','FTA','MTA','Valve','Nipple','Clamp','Solvent','Bypass'];
+  const typeSet=new Set(['All']);
+  allLksForFilter.forEach(k=>{
+    data[k].forEach(i=>{
+      if(i.brand) brandSet.add(i.brand);
+      typeOrder.forEach(kw=>{
+        if(i.name.toLowerCase().includes(kw.toLowerCase())) typeSet.add(kw);
+      });
+    });
+  });
+  const brands=[...brandSet];
+  const types=['All',...typeOrder.filter(t=>typeSet.has(t)&&t!=='All')];
 
   let h=`<div class="stitle">📦 Stock Inventory</div><div class="ssub">Critical & low items shown first.</div>`;
 
-  // Search + Filter bar
+  // Search bar
   h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-    <div class="search-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search item..." value="${stockSearch}" oninput="stockSearch=this.value;render()"/></div>
+    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;render()"/></div>
+    ${stockSearch?`<button class="btn red" onclick="stockSearch='';render()" style="flex-shrink:0"><i class="fa-solid fa-xmark"></i> Clear</button>`:''}
   </div>`;
+
+  // Level 1 — Brand filter
+  h+=`<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Brand</div>`;
+  h+=`<div class="filter-bar" style="margin-bottom:12px">`;
+  brands.forEach(b=>{
+    const isAct=stockBrand===b;
+    const bg=b==='CPVC'?'#E7F0FB':b==='Brass CPVC'?'#FFF1D6':b==='PVC'?'#E6F4D8':'';
+    const col=b==='CPVC'?'var(--blue)':b==='Brass CPVC'?'var(--amber)':b==='PVC'?'var(--green)':'';
+    h+=`<button class="filter-pill ${isAct?'act':''}" style="${isAct?'':bg?'background:'+bg+';color:'+col+';border-color:'+col:''}" onclick="stockBrand='${b}';stockFilter='All';render()">${b}</button>`;
+  });
+  h+=`</div>`;
+
+  // Level 2 — Type filter (only show if brand selected)
+  h+=`<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Type</div>`;
   h+=`<div class="filter-bar">`;
-  keywords.forEach(k2=>{h+=`<button class="filter-pill ${stockFilter===k2?'act':''}" onclick="stockFilter='${k2}';render()">${k2}</button>`;});
+  // Filter types based on selected brand
+  const brandFilteredTypes=new Set(['All']);
+  allLksForFilter.forEach(k=>{
+    data[k].filter(i=>stockBrand==='All'||i.brand===stockBrand).forEach(i=>{
+      typeOrder.forEach(kw=>{if(i.name.toLowerCase().includes(kw.toLowerCase()))brandFilteredTypes.add(kw);});
+    });
+  });
+  ['All',...typeOrder.filter(t=>brandFilteredTypes.has(t)&&t!=='All')].forEach(k2=>{
+    h+=`<button class="filter-pill ${stockFilter===k2?'act':''}" onclick="stockFilter='${k2}';render()">${k2}</button>`;
+  });
   h+=`</div>`;
 
   lks.forEach(k=>{
     let items=sortItems(data[k]);
+    if(stockBrand!=='All') items=items.filter(i=>i.brand===stockBrand);
     if(stockFilter!=='All') items=items.filter(i=>i.name.toLowerCase().includes(stockFilter.toLowerCase()));
-    if(stockSearch) items=items.filter(i=>i.name.toLowerCase().includes(stockSearch.toLowerCase()));
+    if(stockSearch){const q=stockSearch.toLowerCase();items=items.filter(i=>i.name.toLowerCase().includes(q)||i.brand.toLowerCase().includes(q)||(i.cat&&i.cat.toLowerCase().includes(q)));}
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const low=items.filter(i=>st(i)!=='ok').length;
     h+=`<div class="card">
@@ -570,7 +817,7 @@ function buildStock(){
               <td style="color:var(--text3);font-size:12px">${idx+1}</td>
               <td><b style="font-size:13.5px">${i.name}</b><span class="cat-pill" style="background:${CP[i.cat]||'#eee'};color:${CT[i.cat]||'#333'}">${i.cat}</span></td>
               <td><span class="qnum">${i.qty}</span></td>
-              <td><span class="badge ${s==='ok'?'ok':s==='low'?'low':'crit'}">${s==='ok'?'✓ Good':s==='low'?'⚠ Low':'✗ Critical'}</span></td>
+              <td><span class="badge ${s==='ok'?'ok':s==='low'?'low':'crit'}">${s==='ok'?'✓ Good':s==='low'?'⚠ Low':s==='zero'?'⛔ Out of Stock':'✗ Critical'}</span></td>
               <td style="color:var(--blue);font-weight:700">${fmt(i.cp*i.qty)}</td>
               <td><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <input class="qin" id="q_${k}_${i.id}" type="number" min="1" value="1"/>
@@ -1269,6 +1516,374 @@ function changePIN(){
 }
 
 initPin();
+
+
+// ── PWA INSTALL ───────────────────────────────────────────────────
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').style.display='flex';
+});
+function installApp(){
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(()=>{
+      deferredPrompt=null;
+      document.getElementById('installBanner').style.display='none';
+    });
+  }
+}
+window.addEventListener('appinstalled', ()=>{
+  document.getElementById('installBanner').style.display='none';
+  toast('App installed on home screen! 🎉','ok');
+});
+
+
+// ── SETTINGS ─────────────────────────────────────────────────────
+function buildSettings(){
+  let h=`<div class="stitle">⚙️ Settings</div><div class="ssub">Customize how the dashboard works</div>`;
+
+  h+=`<div class="card">
+    <div class="ctitle"><i class="fa-solid fa-bell"></i>Stock Alert Settings</div>
+    <div class="alert info" style="margin-bottom:14px"><i class="fa-solid fa-circle-info"></i>These settings control when items appear in your alert list. Each item also has its own minimum — the higher value is used.</div>
+
+    <div class="fg">
+      <label>Global minimum alert quantity — show alert when any item falls below this number</label>
+      <input id="sGlobalMin" type="number" min="0" value="${settings.globalMinAlert}" style="max-width:120px"/>
+      <span style="font-size:12px;color:var(--text2);margin-top:4px">Currently: if qty ≤ <strong>${settings.globalMinAlert}</strong>, alert shows. Set to 0 to use each item's own minimum only.</span>
+    </div>
+
+    <div class="fg" style="margin-bottom:0">
+      <label>Alert types to show</label>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:400;color:var(--text)">
+          <input type="checkbox" id="sZero" ${settings.showZeroAlert?'checked':''} style="width:18px;height:18px;cursor:pointer"/>
+          ⛔ Show <strong>Out of Stock</strong> alerts (qty = 0)
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:400;color:var(--text)">
+          <input type="checkbox" id="sLow" ${settings.showLowAlert?'checked':''} style="width:18px;height:18px;cursor:pointer"/>
+          ⚠️ Show <strong>Low stock</strong> alerts (qty below minimum)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle"><i class="fa-solid fa-store"></i>Shop Settings</div>
+    <div class="fg">
+      <label>Shop name</label>
+      <input id="sShopName" value="${settings.shopName}" placeholder="Khushboo Sanitary World"/>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ctitle"><i class="fa-solid fa-rotate"></i>Data Management</div>
+    <div class="alert warn" style="margin-bottom:12px"><i class="fa-solid fa-triangle-exclamation"></i>Reset will clear ALL stock data, transactions and history. Cannot be undone!</div>
+    <button class="btn red" onclick="resetAllData()"><i class="fa-solid fa-trash"></i> Reset All Data</button>
+  </div>
+
+  <button class="btn primary full" onclick="saveSettings()" style="margin-top:4px"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>`;
+
+  return h;
+}
+
+function saveSettings(){
+  const globalMin = parseInt(document.getElementById('sGlobalMin').value)||0;
+  const showZero = document.getElementById('sZero').checked;
+  const showLow = document.getElementById('sLow').checked;
+  const shopName = document.getElementById('sShopName').value.trim()||'Khushboo Sanitary World';
+  settings = {globalMinAlert:globalMin, showZeroAlert:showZero, showLowAlert:showLow, shopName};
+  autoSave();
+  // Update brand name in header
+  document.querySelector('.brand-name').textContent = shopName;
+  toast('Settings saved ✓','ok');
+}
+
+function resetAllData(){
+  if(!confirm('Are you sure? This will delete ALL data permanently!')) return;
+  if(!confirm('Last warning — all stock, transactions and history will be gone!')) return;
+  data={shop:[],g1:[],g2:[],g3:[],g4:[]};
+  txLog=[];
+  history={weekly:{},monthly:{},quarterly:{},yearly:{}};
+  nid={shop:20,g1:90,g2:20,g3:20,g4:20};
+  autoSave();
+  toast('All data reset','ok');
+  setPage('home');
+}
+
+
+// ── IMPORT STOCK ─────────────────────────────────────────────────
+function buildImport(){
+  const lks=curLoc==='all'?LKS:[curLoc];
+  let h=`<div class="stitle">📥 Import Stock</div>
+  <div class="ssub">Paste JSON data from Claude to bulk import items instantly</div>`;
+
+  h+=`<div class="alert info" style="margin-bottom:14px">
+    <i class="fa-solid fa-circle-info"></i>
+    <div>
+      <strong>How to use:</strong><br>
+      1. Send your stock photos to Claude<br>
+      2. Claude gives you a JSON list<br>
+      3. Paste it below → Preview → Import!
+    </div>
+  </div>`;
+
+  h+=`<div class="card">
+    <div class="ctitle"><i class="fa-solid fa-location-dot"></i>Import to location</div>
+    <div class="fg" style="margin-bottom:0">
+      <select id="importLoc" style="max-width:220px">
+        ${LKS.map(k=>`<option value="${k}" ${(curLoc!=='all'&&curLoc===k)?'selected':''}>${LOCS[k].name}</option>`).join('')}
+      </select>
+    </div>
+  </div>`;
+
+  h+=`<div class="card">
+    <div class="ctitle"><i class="fa-solid fa-code"></i>Paste JSON here</div>
+    <div class="fg">
+      <label>JSON data from Claude</label>
+      <textarea id="importJSON" rows="8" style="font-family:monospace;font-size:13px;resize:vertical" placeholder='Paste JSON here, example:
+[
+  {"name":"CPVC Elbow 1\"","cat":"Fittings","brand":"CPVC","qty":50,"min":10,"cp":0},
+  {"name":"CPVC Tee 3/4\"","cat":"Fittings","brand":"CPVC","qty":100,"min":15,"cp":0}
+]'></textarea>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" onclick="previewImport()"><i class="fa-solid fa-eye"></i> Preview</button>
+      <button class="btn" onclick="document.getElementById('importJSON').value='';document.getElementById('importPreview').innerHTML=''"><i class="fa-solid fa-xmark"></i> Clear</button>
+    </div>
+  </div>`;
+
+  h+=`<div id="importPreview"></div>`;
+  return h;
+}
+
+function previewImport(){
+  const raw = document.getElementById('importJSON').value.trim();
+  const loc = document.getElementById('importLoc').value;
+  const preview = document.getElementById('importPreview');
+
+  if(!raw){toast('Paste JSON data first','warn');return;}
+
+  let items;
+  try{
+    // Clean common issues
+    let cleaned = raw
+      .replace(/'/g,'"')
+      .replace(/,\s*]/g,']')
+      .replace(/,\s*}/g,'}');
+    items = JSON.parse(cleaned);
+    if(!Array.isArray(items)) items=[items];
+  }catch(e){
+    preview.innerHTML=`<div class="alert err"><i class="fa-solid fa-circle-xmark"></i>Invalid JSON! Please check the format. Error: ${e.message}</div>`;
+    return;
+  }
+
+  if(!items.length){toast('No items found in JSON','warn');return;}
+
+  // Check which items exist already
+  const existing = data[loc];
+  let newItems=[], updateItems=[], skipItems=[];
+
+  items.forEach(item=>{
+    if(!item.name){skipItems.push(item);return;}
+    const found = existing.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+    if(found){
+      updateItems.push({...item, oldQty: found.qty, newQty: found.qty + (item.qty||0)});
+    } else {
+      newItems.push(item);
+    }
+  });
+
+  let h=`<div class="card">
+    <div class="ctitle"><i class="fa-solid fa-eye"></i>Preview — ${items.length} items to ${LOCS[loc].name}</div>`;
+
+  if(newItems.length){
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ ${newItems.length} NEW items to add:</div>`;
+    h+=`<div class="tw" style="margin-bottom:14px"><table class="tbl"><thead><tr><th>Name</th><th>Brand</th><th>Qty</th><th>Min</th><th>CP ₹</th></tr></thead><tbody>`;
+    newItems.forEach(i=>{
+      h+=`<tr><td><b>${i.name}</b></td><td>${i.brand||'PVC'}</td><td style="font-weight:700;color:var(--green)">${i.qty||0}</td><td>${i.min||5}</td><td>${i.cp||0}</td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+
+  if(updateItems.length){
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:8px">🔄 ${updateItems.length} EXISTING items to update (qty will be added):</div>`;
+    h+=`<div class="tw" style="margin-bottom:14px"><table class="tbl"><thead><tr><th>Name</th><th>Current Qty</th><th>Adding</th><th>New Total</th></tr></thead><tbody>`;
+    updateItems.forEach(i=>{
+      h+=`<tr><td><b>${i.name}</b></td><td>${i.oldQty}</td><td style="color:var(--green)">+${i.qty||0}</td><td style="font-weight:700;color:var(--blue)">${i.newQty}</td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
+  }
+
+  if(skipItems.length){
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:8px">⚠️ ${skipItems.length} items skipped (no name).</div>`;
+  }
+
+  h+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+    <button class="btn green full" onclick="doImport()"><i class="fa-solid fa-file-import"></i> Import ${items.length} Items to ${LOCS[loc].name}</button>
+  </div></div>`;
+
+  preview.innerHTML = h;
+  // Store parsed items for doImport
+  window._importItems = items;
+  window._importLoc = loc;
+}
+
+function doImport(){
+  const items = window._importItems;
+  const loc = window._importLoc;
+  if(!items||!items.length){toast('Nothing to import','warn');return;}
+
+  const existing = data[loc];
+  let added=0, updated=0;
+
+  items.forEach(item=>{
+    if(!item.name) return;
+    const found = existing.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+    if(found){
+      const addQty = item.qty||0;
+      found.qty += addQty;
+      found.purchased += addQty;
+      updated++;
+    } else {
+      const maxId = Math.max(...existing.map(i=>i.id), nid[loc]);
+      nid[loc] = maxId + 1;
+      existing.push({
+        id: nid[loc]++,
+        name: item.name,
+        cat: item.cat||'Fittings',
+        brand: item.brand||'PVC',
+        qty: item.qty||0,
+        min: item.min||5,
+        cp: item.cp||0,
+        purchased: item.qty||0,
+        revenue: 0,
+        sold: 0,
+        lastSoldDays: 0
+      });
+      added++;
+    }
+  });
+
+  autoSave();
+  toast(`✅ Imported! ${added} new items added, ${updated} updated`,'ok');
+  document.getElementById('importJSON').value='';
+  document.getElementById('importPreview').innerHTML='';
+  window._importItems=null;
+  setPage('stock');
+}
+
+
+
+function saveData(silent){
+  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));if(!silent)toast('Saved ✓','ok');}
+  catch(e){toast('Could not save!','err');}
+}
+function autoSave(){saveData(true);}
+
+
+// ── FIREBASE SYNC ─────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",
+  authDomain: "khushboo-sanitary.firebaseapp.com",
+  databaseURL: "https://khushboo-sanitary-default-rtdb.firebaseio.com",
+  projectId: "khushboo-sanitary",
+  storageBucket: "khushboo-sanitary.firebasestorage.app",
+  messagingSenderId: "986712566065",
+  appId: "1:986712566065:web:33d18352f17982ac78e810"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const DBKEY = 'ksw_stock';
+let syncTimeout = null;
+let firebaseConnected = false;
+
+function updateSyncStatus(status){
+  const el=document.getElementById('syncStatus');if(!el)return;
+  if(status==='syncing'){el.innerHTML='<i class="fa-solid fa-rotate fa-spin"></i> Syncing...';el.style.color='rgba(255,255,255,0.7)';}
+  else if(status==='saved'){el.innerHTML='<i class="fa-solid fa-cloud"></i> Saved';el.style.color='rgba(255,255,255,0.9)';}
+  else if(status==='offline'){el.innerHTML='<i class="fa-solid fa-cloud-slash"></i> Offline';el.style.color='rgba(255,200,100,0.9)';}
+  else if(status==='error'){el.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> Sync error';el.style.color='rgba(255,150,150,0.9)';}
+}
+
+function pushToFirebase(){
+  if(syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout=setTimeout(()=>{
+    updateSyncStatus('syncing');
+    db.ref(DBKEY).set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
+      firebaseConnected=true;updateSyncStatus('saved');
+      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+    }).catch(e=>{
+      firebaseConnected=false;updateSyncStatus('error');
+      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+    });
+  },1500);
+}
+
+function saveData(silent){
+  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+  updateSyncStatus('syncing');
+  db.ref(DBKEY).set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
+    firebaseConnected=true;updateSyncStatus('saved');
+    if(!silent)toast('Saved to cloud ✓','ok');
+  }).catch(e=>{
+    updateSyncStatus('error');
+    if(!silent)toast('Saved locally (offline)','warn');
+  });
+}
+
+function autoSave(){
+  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+  pushToFirebase();
+}
+
+function loadFromFirebase(){
+  updateSyncStatus('syncing');
+  db.ref(DBKEY).once('value').then(snap=>{
+    const val=snap.val();
+    if(val&&val.data){
+      data=val.data;txLog=val.txLog||[];
+      history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
+      nid=val.nid||nid;settings=val.settings||settings;
+      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+      firebaseConnected=true;updateSyncStatus('saved');
+      render();
+    } else {
+      pushToFirebase();
+      updateSyncStatus('saved');
+    }
+  }).catch(e=>{
+    firebaseConnected=false;updateSyncStatus('offline');
+    toast('Working offline','warn');
+  });
+}
+
+function startLiveSync(){
+  db.ref(DBKEY+'/lastUpdated').on('value',snap=>{
+    const t=snap.val();
+    if(t&&t>(window._lastSync||0)){
+      window._lastSync=t;
+      db.ref(DBKEY).once('value').then(s=>{
+        const val=s.val();
+        if(val&&val.data){
+          data=val.data;txLog=val.txLog||[];
+          render();toast('🔄 Updated from another device','ok');
+        }
+      });
+    }
+  });
+}
+
+db.ref('.info/connected').on('value',snap=>{
+  firebaseConnected=snap.val()===true;
+  updateSyncStatus(firebaseConnected?'saved':'offline');
+});
+
+window._lastSync=Date.now();
+loadFromFirebase();
+startLiveSync();
 
 render();
 </script>
