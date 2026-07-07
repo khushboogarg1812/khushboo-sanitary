@@ -16,9 +16,6 @@
 <title>Khushboo Sanitary World</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
-
-
-
 <style>
 :root{
   --bg:#F5F3EE;--surface:#FFFFFF;--surface2:#EDEBE4;
@@ -708,23 +705,13 @@ function buildHome(){
 
   h+='<div class="card"><div class="ctitle"><i class="fa-solid fa-triangle-exclamation"></i>Stock Alerts</div>';
   let any=false;
-  LKS.forEach(k=>{sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{any=true;const s=st(i);h+=`<div class="alert ${s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[k].name}:</b> ${i.name} — only <b>${i.qty}</b> left (min: ${i.min})</div></div>`;});});
+  LKS.forEach(k=>{sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{any=true;const s=st(i);h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[k].name}:</b> ${i.name} — <b>${s==='zero'?'⛔ OUT OF STOCK':'only '+i.qty+' left (min: '+i.min+')'}</b></div></div>`;});});
   if(!any) h+='<div class="alert ok"><i class="fa-solid fa-circle-check"></i>All locations stocked well — no alerts!</div>';
   h+='</div>';
   return h;
 }
 
 // ── STOCK ────────────────────────────────────────────────────────
-function renderStock(){
-  // Only re-render the stock items without rebuilding the whole page
-  const itemsEl = document.getElementById('stockItems');
-  if(!itemsEl){render();return;}
-  const input = document.getElementById('stockSearchInput');
-  const curPos = input ? input.selectionStart : 0;
-  buildStockItems();
-  if(input){input.focus();input.setSelectionRange(curPos,curPos);}
-}
-
 function buildStock(){
   // If ALL selected, show location summary cards instead of full tables
   if(curLoc==='all'){
@@ -777,7 +764,7 @@ function buildStock(){
 
   // Search bar
   h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;renderStock()" id="stockSearchInput"/></div>
+    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;render()"/></div>
     ${stockSearch?`<button class="btn red" onclick="stockSearch='';render()" style="flex-shrink:0"><i class="fa-solid fa-xmark"></i> Clear</button>`:''}
   </div>`;
 
@@ -807,7 +794,6 @@ function buildStock(){
   });
   h+=`</div>`;
 
-  h+=`<div id="stockItems">`;
   lks.forEach(k=>{
     let items=sortItems(data[k]);
     if(stockBrand!=='All') items=items.filter(i=>i.brand===stockBrand);
@@ -1415,11 +1401,9 @@ function doTransfer(){
 
 function editItem(loc,id){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
-  const newName=prompt(`Item name:\n(current: ${item.name})`,item.name);
-  if(newName&&newName.trim()) item.name=newName.trim();
-  const cp=parseFloat(prompt(`Cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
+  const cp=parseFloat(prompt(`New cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
   if(!isNaN(cp)&&cp>=0) item.cp=cp;
-  const mn=parseInt(prompt(`Min alert qty for "${item.name}"\nCurrent: ${item.min}`));
+  const mn=parseInt(prompt(`New min alert qty for "${item.name}"\nCurrent: ${item.min}`));
   if(!isNaN(mn)&&mn>=0) item.min=mn;
   autoSave();render();
 }
@@ -1668,31 +1652,6 @@ function buildImport(){
   </div>`;
 
   h+=`<div id="importPreview"></div>`;
-
-  h+=`<div class="card" style="margin-top:14px">
-    <div class="ctitle"><i class="fa-solid fa-minus"></i>Bulk Deduct Stock</div>
-    <div class="alert warn" style="margin-bottom:12px"><i class="fa-solid fa-triangle-exclamation"></i>This will DEDUCT quantities from existing items. Use carefully!</div>
-    <div class="fg">
-      <label>Location to deduct from</label>
-      <select id="deductLoc" style="max-width:220px">
-        ${LKS.map(k=>`<option value="${k}">${LOCS[k].name}</option>`).join('')}
-      </select>
-    </div>
-    <div class="fg">
-      <label>JSON data (item name + qty to deduct)</label>
-      <textarea id="deductJSON" rows="6" style="font-family:monospace;font-size:13px;resize:vertical" placeholder='Example:
-[
-  {"name":"PVC Elbow ½\"","qty":50},
-  {"name":"CPVC Tee ¾\"","qty":100}
-]'></textarea>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn amber" onclick="previewDeduct()"><i class="fa-solid fa-eye"></i> Preview Deduct</button>
-      <button class="btn" onclick="document.getElementById('deductJSON').value='';document.getElementById('deductPreview').innerHTML=''"><i class="fa-solid fa-xmark"></i> Clear</button>
-    </div>
-    <div id="deductPreview" style="margin-top:12px"></div>
-  </div>`;
-
   return h;
 }
 
@@ -1814,185 +1773,80 @@ function doImport(){
 
 
 
-function saveData(silent){
-  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));if(!silent)toast('Saved ✓','ok');}
-  catch(e){toast('Could not save!','err');}
-}
-function autoSave(){saveData(true);}
-
 
 // ── FIREBASE SYNC ─────────────────────────────────────────────────
-const firebaseConfig = {
-  apiKey: "AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",
-  authDomain: "khushboo-sanitary.firebaseapp.com",
-  databaseURL: "https://khushboo-sanitary-default-rtdb.firebaseio.com",
-  projectId: "khushboo-sanitary",
-  storageBucket: "khushboo-sanitary.firebasestorage.app",
-  messagingSenderId: "986712566065",
-  appId: "1:986712566065:web:33d18352f17982ac78e810"
-};
+const firebaseConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
 
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const DBKEY = 'ksw_stock';
-let syncTimeout = null;
-let firebaseConnected = false;
+let _fbApp, _db, _syncT=null, _fbOk=false;
 
-function updateSyncStatus(status){
+function updateSyncStatus(s){
   const el=document.getElementById('syncStatus');if(!el)return;
-  if(status==='syncing'){el.innerHTML='<i class="fa-solid fa-rotate fa-spin"></i> Syncing...';el.style.color='rgba(255,255,255,0.7)';}
-  else if(status==='saved'){el.innerHTML='<i class="fa-solid fa-cloud"></i> Saved';el.style.color='rgba(255,255,255,0.9)';}
-  else if(status==='offline'){el.innerHTML='<i class="fa-solid fa-cloud-slash"></i> Offline';el.style.color='rgba(255,200,100,0.9)';}
-  else if(status==='error'){el.innerHTML='<i class="fa-solid fa-triangle-exclamation"></i> Sync error';el.style.color='rgba(255,150,150,0.9)';}
-}
-
-function pushToFirebase(){
-  if(syncTimeout) clearTimeout(syncTimeout);
-  syncTimeout=setTimeout(()=>{
-    updateSyncStatus('syncing');
-    db.ref(DBKEY).set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-      firebaseConnected=true;updateSyncStatus('saved');
-      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-    }).catch(e=>{
-      firebaseConnected=false;updateSyncStatus('error');
-      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-    });
-  },3000);
+  if(s==='syncing'){el.innerHTML='<i class="fa-solid fa-rotate fa-spin"></i> Syncing...';el.style.color='rgba(255,255,255,0.7)';}
+  else if(s==='saved'){el.innerHTML='<i class="fa-solid fa-cloud"></i> Saved';el.style.color='rgba(255,255,255,0.9)';}
+  else if(s==='offline'){el.innerHTML='<i class="fa-solid fa-cloud-slash"></i> Offline';el.style.color='rgba(255,200,100,0.9)';}
 }
 
 function saveData(silent){
   try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+  if(!_db){if(!silent)toast('Saved locally','ok');return;}
   updateSyncStatus('syncing');
-  db.ref(DBKEY).set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-    firebaseConnected=true;updateSyncStatus('saved');
+  _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
+    _fbOk=true;updateSyncStatus('saved');
     if(!silent)toast('Saved to cloud ✓','ok');
-  }).catch(e=>{
-    updateSyncStatus('error');
-    if(!silent)toast('Saved locally (offline)','warn');
-  });
+  }).catch(()=>{updateSyncStatus('offline');if(!silent)toast('Saved locally','ok');});
 }
 
 function autoSave(){
   try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-  pushToFirebase();
-}
-
-function loadFromFirebase(){
-  updateSyncStatus('syncing');
-  db.ref(DBKEY).once('value').then(snap=>{
-    const val=snap.val();
-    if(val&&val.data){
-      data=val.data;txLog=val.txLog||[];
-      history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
-      nid=val.nid||nid;settings=val.settings||settings;
+  if(!_db)return;
+  if(_syncT)clearTimeout(_syncT);
+  _syncT=setTimeout(()=>{
+    _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
+      _fbOk=true;updateSyncStatus('saved');
       try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-      firebaseConnected=true;updateSyncStatus('saved');
-      render();
-    } else {
-      pushToFirebase();
-      updateSyncStatus('saved');
-    }
-  }).catch(e=>{
-    firebaseConnected=false;updateSyncStatus('offline');
-    updateSyncStatus('offline');
-  });
+    }).catch(()=>updateSyncStatus('offline'));
+  },2000);
 }
 
-function startLiveSync(){
-  db.ref(DBKEY+'/lastUpdated').on('value',snap=>{
-    const t=snap.val();
-    if(t&&t>(window._lastSync||0)){
-      window._lastSync=t;
-      db.ref(DBKEY).once('value').then(s=>{
-        const val=s.val();
-        if(val&&val.data){
-          data=val.data;txLog=val.txLog||[];
-          render();toast('🔄 Updated from another device','ok');
-        }
-      });
-    }
-  });
-}
-
-db.ref('.info/connected').on('value',snap=>{
-  firebaseConnected=snap.val()===true;
-  updateSyncStatus(firebaseConnected?'saved':'offline');
-});
-
-window._lastSync=Date.now();
-loadFromFirebase();
-startLiveSync();
-
-
-function previewDeduct(){
-  const raw=document.getElementById('deductJSON').value.trim();
-  const loc=document.getElementById('deductLoc').value;
-  const preview=document.getElementById('deductPreview');
-  if(!raw){toast('Paste JSON first','warn');return;}
-  let items;
+// Init Firebase after page loads
+window.addEventListener('load',function(){
   try{
-    let cleaned=raw.replace(/'/g,'"').replace(/,\s*]/g,']').replace(/,\s*}/g,'}');
-    items=JSON.parse(cleaned);
-    if(!Array.isArray(items))items=[items];
-  }catch(e){
-    preview.innerHTML=`<div class="alert err"><i class="fa-solid fa-circle-xmark"></i>Invalid JSON! Error: ${e.message}</div>`;
-    return;
-  }
-  if(!items.length){toast('No items found','warn');return;}
-
-  const existing=data[loc];
-  let found=[],notFound=[];
-  items.forEach(item=>{
-    if(!item.name)return;
-    const match=existing.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
-    if(match){
-      found.push({...item,currentQty:match.qty,newQty:Math.max(0,match.qty-(item.qty||0))});
-    } else {
-      notFound.push(item);
-    }
-  });
-
-  let h=`<div class="card">
-    <div class="ctitle"><i class="fa-solid fa-eye"></i>Deduct Preview — ${LOCS[loc].name}</div>`;
-  if(found.length){
-    h+=`<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:8px">⚠️ ${found.length} items will be deducted:</div>`;
-    h+=`<div class="tw" style="margin-bottom:14px"><table class="tbl"><thead><tr><th>Item</th><th>Current</th><th>Deduct</th><th>New Qty</th></tr></thead><tbody>`;
-    found.forEach(i=>{
-      h+=`<tr><td><b>${i.name}</b></td><td>${i.currentQty}</td><td style="color:var(--red)">-${i.qty}</td><td style="font-weight:700;color:${i.newQty===0?'var(--red)':'var(--blue)'}">${i.newQty}</td></tr>`;
+    _fbApp=firebase.initializeApp(firebaseConfig);
+    _db=firebase.database();
+    _db.ref('.info/connected').on('value',snap=>{
+      _fbOk=snap.val()===true;
+      updateSyncStatus(_fbOk?'saved':'offline');
     });
-    h+=`</tbody></table></div>`;
-  }
-  if(notFound.length){
-    h+=`<div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">❌ ${notFound.length} items NOT found (will be skipped):</div>`;
-    notFound.forEach(i=>h+=`<div style="font-size:13px;color:var(--text2);margin-bottom:4px">• ${i.name}</div>`);
-  }
-  h+=`<button class="btn red full" style="margin-top:12px" onclick="doDeduct()"><i class="fa-solid fa-minus"></i> Deduct ${found.length} Items from ${LOCS[loc].name}</button></div>`;
-
-  preview.innerHTML=h;
-  window._deductItems=found;
-  window._deductLoc=loc;
-}
-
-function doDeduct(){
-  const items=window._deductItems;
-  const loc=window._deductLoc;
-  if(!items||!items.length){toast('Nothing to deduct','warn');return;}
-  const existing=data[loc];
-  let deducted=0;
-  items.forEach(item=>{
-    const match=existing.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
-    if(match){
-      match.qty=Math.max(0,match.qty-item.qty);
-      deducted++;
-    }
-  });
-  autoSave();
-  toast(`✅ Deducted from ${deducted} items!`,'ok');
-  document.getElementById('deductJSON').value='';
-  document.getElementById('deductPreview').innerHTML='';
-  window._deductItems=null;
-  setPage('stock');
-}
+    // Load from Firebase
+    updateSyncStatus('syncing');
+    _db.ref('ksw_stock').once('value').then(snap=>{
+      const val=snap.val();
+      if(val&&val.data){
+        data=val.data;txLog=val.txLog||[];
+        history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
+        nid=val.nid||nid;if(val.settings)settings=val.settings;
+        try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+        _fbOk=true;updateSyncStatus('saved');
+        render();
+      } else {
+        // First time - push baked data
+        autoSave();updateSyncStatus('saved');
+      }
+    }).catch(()=>{updateSyncStatus('offline');});
+    // Live sync
+    let _lastSync=Date.now();
+    _db.ref('ksw_stock/lastUpdated').on('value',snap=>{
+      const t=snap.val();
+      if(t&&t>_lastSync){
+        _lastSync=t;
+        _db.ref('ksw_stock').once('value').then(s=>{
+          const v=s.val();
+          if(v&&v.data){data=v.data;txLog=v.txLog||[];render();toast('🔄 Updated from another device','ok');}
+        });
+      }
+    });
+  }catch(e){console.warn('Firebase error:',e);updateSyncStatus('offline');}
+});
 
 render();
 </script>
