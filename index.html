@@ -629,13 +629,15 @@ function toast(msg,type){
   w.appendChild(d);setTimeout(()=>d.remove(),3000);
 }
 
-const st=i=>{if(i.qty===0)return (settings.showZeroAlert!==false)?'zero':'ok';if(i.qty<=Math.max(i.min,settings.globalMinAlert)*0.5)return'crit';if(i.qty<=Math.max(i.min,settings.globalMinAlert))return'low';return'ok';};
+const st=i=>{if(i.qty===0)return 'zero';if(i.qty<=Math.max(i.min,settings.globalMinAlert)*0.5)return'crit';if(i.qty<=Math.max(i.min,settings.globalMinAlert))return'low';return'ok';};
 const sortItems=items=>[...items].sort((a,b)=>{const o={zero:0,crit:1,low:2,ok:3};return o[st(a)]-o[st(b)];});
 
 function setLoc(l){
   curLoc=l;
   document.querySelectorAll('.ltb').forEach(b=>b.classList.remove('act'));
   document.getElementById('ltb-'+l).classList.add('act');
+  // When switching to ALL, go to home for performance
+  if(l==='all' && curPage==='stock'){curPage='home';}
   // Hide Reports & Analytics when not on All
   const repBtn=document.getElementById('nb-reports');
   const anaBtn=document.getElementById('nb-analytics');
@@ -1825,6 +1827,7 @@ function autoSave(){
 // Init Firebase after page loads
 window.addEventListener('load',function(){
   try{
+    if(typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
     _fbApp=firebase.initializeApp(firebaseConfig);
     _db=firebase.database();
     _db.ref('.info/connected').on('value',snap=>{
@@ -1859,7 +1862,12 @@ window.addEventListener('load',function(){
         });
       }
     });
-  }catch(e){console.warn('Firebase error:',e);updateSyncStatus('offline');}
+  }catch(e){
+    console.warn('Firebase error:',e);
+    updateSyncStatus('offline');
+    // Still work without Firebase - use localStorage only
+    document.getElementById('syncStatus').innerHTML='<i class="fa-solid fa-hard-drive"></i> Local only';
+  }
 });
 
 render();
