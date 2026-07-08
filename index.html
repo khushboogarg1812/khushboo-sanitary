@@ -610,6 +610,7 @@ function snapshotCurrent(period){
     locations:{}
   };
   LKS.forEach(k=>{
+    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
@@ -672,7 +673,7 @@ function render(){
 // ── HOME ─────────────────────────────────────────────────────────
 function buildHome(){
   let tSV=0,tInv=0,tRev=0,tAl=0,tStk=0;
-  LKS.forEach(k=>{data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i)!=='ok').length;});
+  LKS.forEach(k=>{if(!data[k])return;data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i)!=='ok').length;});
   const pl=tRev-tInv;
   let h=`<div class="stitle">Khushboo Sanitary World</div><div class="ssub">Complete business overview — all 5 locations</div>`;
   h+=`<div class="metrics">
@@ -685,6 +686,7 @@ function buildHome(){
 
   h+='<div class="loc-overview">';
   LKS.forEach(k=>{
+    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
@@ -708,6 +710,7 @@ function buildHome(){
   // Collect all alerts across locations
   let allAlerts=[];
   LKS.forEach(k=>{
+    if(!data[k])return;
     sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{
       allAlerts.push({loc:k,item:i,s:st(i)});
     });
