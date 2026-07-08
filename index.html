@@ -195,7 +195,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 
 /* ── PIN LOCK ── */
-.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;}
+.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:all;}
 .pin-box{background:#fff;border-radius:20px;padding:36px 32px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
 .pin-logo{font-size:40px;margin-bottom:10px;}
 .pin-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
@@ -274,6 +274,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="hbtns">
     <button class="hbtn" onclick="changePIN()"><i class="fa-solid fa-lock"></i><span>PIN</span></button>
     <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
+    <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
     <button class="hbtn" onclick="saveData()"><i class="fa-solid fa-floppy-disk"></i><span>Save</span></button>
     <button class="hbtn" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
   </div>
@@ -312,6 +313,8 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 </div>
 
 
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
 const LOCS={shop:{name:'Shop',dot:'#1A5FA8'},g1:{name:'Godown 1',dot:'#27650C'},g2:{name:'Godown 2',dot:'#7B4700'},g3:{name:'Godown 3',dot:'#3E339A'},g4:{name:'Godown 4',dot:'#0B5E52'}};
 const LKS=['shop','g1','g2','g3','g4'];
@@ -608,6 +611,7 @@ function snapshotCurrent(period){
     locations:{}
   };
   LKS.forEach(k=>{
+    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
@@ -635,6 +639,8 @@ function setLoc(l){
   document.querySelectorAll('.ltb').forEach(b=>b.classList.remove('act'));
   document.getElementById('ltb-'+l).classList.add('act');
   if(l==='all'&&curPage==='stock'){curPage='home';}
+  // When switching to ALL, go to home for performance
+  if(l==='all' && curPage==='stock'){curPage='home';}
   // Hide Reports & Analytics when not on All
   const repBtn=document.getElementById('nb-reports');
   const anaBtn=document.getElementById('nb-analytics');
@@ -668,10 +674,31 @@ function render(){
 
 // ── HOME ─────────────────────────────────────────────────────────
 function buildHome(){
+  if(!data) return '<div class="card">Loading...</div>';
   let tSV=0,tInv=0,tRev=0,tAl=0,tStk=0;
   LKS.forEach(k=>{if(!data[k])return;data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i)!=='ok').length;});
   const pl=tRev-tInv;
   let h=`<div class="stitle">Khushboo Sanitary World</div><div class="ssub">Complete business overview — all 5 locations</div>`;
+
+  // ── ALERTS FIRST ──────────────────────────────────────────────
+  let allAlerts=[];
+  LKS.forEach(k=>{
+    if(!data[k])return;
+    sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{
+      allAlerts.push({loc:k,item:i,s:st(i)});
+    });
+  });
+  allAlerts.sort((a,b)=>{if(a.item.qty===0&&b.item.qty!==0)return -1;if(b.item.qty===0&&a.item.qty!==0)return 1;return a.item.qty-b.item.qty;});
+
+  if(allAlerts.length){
+    h+='<div class="card"><div class="ctitle"><i class="fa-solid fa-triangle-exclamation"></i>Stock Alerts ('+allAlerts.length+')</div>';
+    allAlerts.forEach(({loc,item:i,s})=>{
+      h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[loc].name}:</b> ${i.name} — <b>${s==='zero'?'⛔ OUT OF STOCK':'only '+i.qty+' left (min: '+i.min+')'}</b></div></div>`;
+    });
+    h+='</div>';
+  }
+
+  // ── METRICS ───────────────────────────────────────────────────
   h+=`<div class="metrics">
     <div class="metric"><div class="mlabel">📦 Total Stock Value</div><div class="mval blue">${fmt(tSV)}</div></div>
     <div class="metric"><div class="mlabel">💰 Monthly Revenue</div><div class="mval green">${fmt(tRev)}</div></div>
@@ -680,37 +707,30 @@ function buildHome(){
     <div class="metric"><div class="mlabel">📊 Total Units</div><div class="mval teal">${fmtN(tStk)}</div></div>
   </div>`;
 
+  // ── LOCATION CARDS ────────────────────────────────────────────
   h+='<div class="loc-overview">';
   LKS.forEach(k=>{
+    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
     const rev=items.reduce((s,i)=>s+i.revenue,0);
     const ipl=rev-inv;const al=items.filter(i=>st(i)!=='ok').length;
-    h+=`<div class="lcrd" onclick="setLoc('${k}');setPage('stock')">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
-        <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px"><span class="ldot" style="background:${LOCS[k].dot}"></span>${LOCS[k].name}</div>
-        ${al>0?`<span class="badge crit">${al} ⚠</span>`:'<span class="badge ok">✓</span>'}
+    h+=`<div class="loc-card" onclick="setLoc('${k}')">
+      <div class="loc-card-head">
+        <span><span style="width:10px;height:10px;border-radius:50%;background:${LOCS[k].dot};display:inline-block;margin-right:6px"></span>${LOCS[k].name}</span>
+        ${al>0?`<span class="badge bcrit">${al} ⚠</span>`:'<span class="badge bok">✓</span>'}
       </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:3px">Stock value</div>
-      <div style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:7px">${fmt(sv)}</div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
-        <span>P&L: <b style="color:${ipl>=0?'var(--green)':'var(--red)'}">${ipl>=0?'+':''}${fmt(ipl)}</b></span>
-        <span>${items.length} items</span>
-      </div>
+      <div class="loc-stat">Stock value <b>${fmt(sv)}</b></div>
+      <div class="loc-stat">P&L: <b style="color:${ipl>=0?'var(--green)':'var(--red)'}">${ipl>=0?'+':''}${fmt(ipl)}</b></div>
+      <div class="loc-stat" style="color:var(--text2)">${items.length} items</div>
     </div>`;
   });
-  h+='</div>';
-
-  h+='<div class="card"><div class="ctitle"><i class="fa-solid fa-triangle-exclamation"></i>Stock Alerts</div>';
-  let any=false;
-  LKS.forEach(k=>{sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{any=true;const s=st(i);h+=`<div class="alert ${s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[k].name}:</b> ${i.name} — only <b>${i.qty}</b> left (min: ${i.min})</div></div>`;});});
-  if(!any) h+='<div class="alert ok"><i class="fa-solid fa-circle-check"></i>All locations stocked well — no alerts!</div>';
   h+='</div>';
   return h;
 }
 
-// ── STOCK ────────────────────────────────────────────────────────
+
 function buildStock(){
   // If ALL selected, show location summary cards instead of full tables
   if(curLoc==='all'){
@@ -763,7 +783,7 @@ function buildStock(){
 
   // Search bar
   h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;render()"/></div>
+    <div class="search-wrap" style="flex:1;min-width:200px"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input class="search-inp" placeholder="Search by name, size or brand..." value="${stockSearch}" oninput="stockSearch=this.value;filterStock()" id="stockSearchInput"/></div>
     ${stockSearch?`<button class="btn red" onclick="stockSearch='';render()" style="flex-shrink:0"><i class="fa-solid fa-xmark"></i> Clear</button>`:''}
   </div>`;
 
@@ -1400,9 +1420,11 @@ function doTransfer(){
 
 function editItem(loc,id){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
-  const cp=parseFloat(prompt(`New cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
+  const newName=prompt(`Item name:\nCurrent: ${item.name}`,item.name);
+  if(newName&&newName.trim()&&newName.trim()!==item.name) item.name=newName.trim();
+  const cp=parseFloat(prompt(`Cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
   if(!isNaN(cp)&&cp>=0) item.cp=cp;
-  const mn=parseInt(prompt(`New min alert qty for "${item.name}"\nCurrent: ${item.min}`));
+  const mn=parseInt(prompt(`Min alert qty for "${item.name}"\nCurrent: ${item.min}`));
   if(!isNaN(mn)&&mn>=0) item.min=mn;
   autoSave();render();
 }
@@ -1651,7 +1673,81 @@ function buildImport(){
   </div>`;
 
   h+=`<div id="importPreview"></div>`;
+
+  h+=`<div class="card" style="margin-top:14px">
+    <div class="ctitle"><i class="fa-solid fa-minus"></i>Bulk Deduct Stock</div>
+    <div class="alert warn" style="margin-bottom:12px"><i class="fa-solid fa-triangle-exclamation"></i>This will DEDUCT quantities from existing items.</div>
+    <div class="fg"><label>Location to deduct from</label>
+      <select id="deductLoc" style="max-width:220px">${LKS.map(k=>`<option value="${k}">${LOCS[k].name}</option>`).join('')}</select>
+    </div>
+    <div class="fg"><label>JSON data (item name + qty to deduct)</label>
+      <textarea id="deductJSON" rows="5" style="font-family:monospace;font-size:13px;resize:vertical" placeholder='[{"name":"PVC Elbow 4\"","qty":10}]'></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn amber" onclick="previewDeduct()"><i class="fa-solid fa-eye"></i> Preview</button>
+      <button class="btn" onclick="document.getElementById('deductJSON').value='';document.getElementById('deductPreview').innerHTML=''"><i class="fa-solid fa-xmark"></i> Clear</button>
+    </div>
+    <div id="deductPreview" style="margin-top:12px"></div>
+  </div>`;
   return h;
+}
+
+function previewDeduct(){
+  const raw=document.getElementById('deductJSON').value.trim();
+  const loc=document.getElementById('deductLoc').value;
+  const preview=document.getElementById('deductPreview');
+  if(!raw){toast('Paste JSON first','warn');return;}
+  let items;
+  try{
+    let cleaned=raw.trim()
+      .replace(/[\u2018\u2019\u201A\u201B]/g,"'")
+      .replace(/[\u201C\u201D\u201E\u201F]/g,'"')
+      .replace(/'/g,'"')
+      .replace(/,\s*\]/g,']')
+      .replace(/,\s*\}/g,'}');
+    items=JSON.parse(cleaned);
+    if(!Array.isArray(items))items=[items];
+  }catch(e){
+    preview.innerHTML=`<div class="alert err"><i class="fa-solid fa-circle-xmark"></i>Invalid JSON! ${e.message}</div>`;return;
+  }
+  if(!data[loc])data[loc]=[];
+  const existing=data[loc];
+  let found=[],notFound=[];
+  items.forEach(item=>{
+    if(!item.name)return;
+    const match=existing.find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+    if(match){found.push({...item,currentQty:match.qty,newQty:Math.max(0,match.qty-(item.qty||0))});}
+    else{notFound.push(item);}
+  });
+  let h=`<div class="card"><div class="ctitle"><i class="fa-solid fa-eye"></i>Preview — ${LOCS[loc].name}</div>`;
+  if(found.length){
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:8px">⚠️ ${found.length} items will be deducted:</div>`;
+    h+=`<div class="tw"><table class="tbl"><thead><tr><th>Item</th><th>Current</th><th>Deduct</th><th>New</th></tr></thead><tbody>`;
+    found.forEach(i=>{h+=`<tr><td><b>${i.name}</b></td><td>${i.currentQty}</td><td style="color:var(--red)">-${i.qty}</td><td style="font-weight:700;color:${i.newQty===0?'var(--red)':'var(--blue)'}">${i.newQty}</td></tr>`;});
+    h+=`</tbody></table></div>`;
+  }
+  if(notFound.length){
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--red);margin:8px 0">❌ ${notFound.length} NOT found:</div>`;
+    notFound.forEach(i=>h+=`<div style="font-size:13px;color:var(--text2)">• ${i.name}</div>`);
+  }
+  h+=`<button class="btn red full" style="margin-top:12px" onclick="doDeduct()"><i class="fa-solid fa-minus"></i> Deduct ${found.length} Items</button></div>`;
+  preview.innerHTML=h;
+  window._deductItems=found;window._deductLoc=loc;
+}
+
+function doDeduct(){
+  const items=window._deductItems;const loc=window._deductLoc;
+  if(!items||!items.length){toast('Nothing to deduct','warn');return;}
+  items.forEach(item=>{
+    const match=data[loc].find(i=>i.name.toLowerCase()===item.name.toLowerCase());
+    if(match)match.qty=Math.max(0,match.qty-item.qty);
+  });
+  autoSave();
+  toast(`✅ Deducted from ${items.length} items!`,'ok');
+  document.getElementById('deductJSON').value='';
+  document.getElementById('deductPreview').innerHTML='';
+  window._deductItems=null;
+  setPage('stock');
 }
 
 function previewImport(){
@@ -1664,10 +1760,12 @@ function previewImport(){
   let items;
   try{
     // Clean common issues
-    let cleaned = raw
+    let cleaned = raw.trim()
+      .replace(/[\u2018\u2019\u201A\u201B]/g,"'")
+      .replace(/[\u201C\u201D\u201E\u201F]/g,'"')
       .replace(/'/g,'"')
-      .replace(/,\s*]/g,']')
-      .replace(/,\s*}/g,'}');
+      .replace(/,\s*\]/g,']')
+      .replace(/,\s*\}/g,'}');
     items = JSON.parse(cleaned);
     if(!Array.isArray(items)) items=[items];
   }catch(e){
@@ -1678,6 +1776,7 @@ function previewImport(){
   if(!items.length){toast('No items found in JSON','warn');return;}
 
   // Check which items exist already
+  if(!data[loc])data[loc]=[];
   const existing = data[loc];
   let newItems=[], updateItems=[], skipItems=[];
 
@@ -1773,9 +1872,10 @@ function doImport(){
 
 
 
-// ── FIREBASE ─────────────────────────────────────────────────────
-const _fbConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
-let _db=null,_syncT=null;
+// ── FIREBASE SYNC ─────────────────────────────────────────────────
+const firebaseConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
+
+let _fbApp, _db, _syncT=null, _fbOk=false;
 
 function updateSyncStatus(s){
   const el=document.getElementById('syncStatus');if(!el)return;
@@ -1789,7 +1889,8 @@ function saveData(silent){
   if(!_db){if(!silent)toast('Saved locally','ok');return;}
   updateSyncStatus('syncing');
   _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-    updateSyncStatus('saved');if(!silent)toast('Saved to cloud ✓','ok');
+    _fbOk=true;updateSyncStatus('saved');
+    if(!silent)toast('Saved to cloud ✓','ok');
   }).catch(()=>{updateSyncStatus('offline');if(!silent)toast('Saved locally','ok');});
 }
 
@@ -1799,18 +1900,23 @@ function autoSave(){
   if(_syncT)clearTimeout(_syncT);
   _syncT=setTimeout(()=>{
     _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-      updateSyncStatus('saved');
+      _fbOk=true;updateSyncStatus('saved');
+      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
     }).catch(()=>updateSyncStatus('offline'));
   },2000);
 }
 
-function initFirebase(){
+// Init Firebase after page loads
+window.addEventListener('load',function(){
   try{
-    firebase.initializeApp(_fbConfig);
+    if(typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
+    _fbApp=firebase.initializeApp(firebaseConfig);
     _db=firebase.database();
     _db.ref('.info/connected').on('value',snap=>{
-      updateSyncStatus(snap.val()===true?'saved':'offline');
+      _fbOk=snap.val()===true;
+      updateSyncStatus(_fbOk?'saved':'offline');
     });
+    // Load from Firebase
     updateSyncStatus('syncing');
     _db.ref('ksw_stock').once('value').then(snap=>{
       const val=snap.val();
@@ -1819,11 +1925,14 @@ function initFirebase(){
         history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
         nid=val.nid||nid;if(val.settings)settings=val.settings;
         try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-        updateSyncStatus('saved');render();
+        _fbOk=true;updateSyncStatus('saved');
+        render();
       } else {
+        // First time - push baked data
         autoSave();updateSyncStatus('saved');
       }
-    }).catch(()=>updateSyncStatus('offline'));
+    }).catch(()=>{updateSyncStatus('offline');});
+    // Live sync
     let _lastSync=Date.now();
     _db.ref('ksw_stock/lastUpdated').on('value',snap=>{
       const t=snap.val();
@@ -1838,26 +1947,74 @@ function initFirebase(){
   }catch(e){
     console.warn('Firebase error:',e);
     updateSyncStatus('offline');
+    // Still work without Firebase - use localStorage only
+    document.getElementById('syncStatus').innerHTML='<i class="fa-solid fa-hard-drive"></i> Local only';
   }
+});
+
+
+function filterStock(){
+  if(curPage!=='stock')return;
+  const inp=document.getElementById('stockSearchInput');
+  const pos=inp?inp.selectionStart:0;
+  const b=document.getElementById('body');
+  if(b)b.innerHTML=buildStock();
+  const newInp=document.getElementById('stockSearchInput');
+  if(newInp){newInp.focus();newInp.setSelectionRange(pos,pos);}
 }
 
-function loadFirebase(){
-  const s1=document.createElement('script');
-  s1.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js';
-  s1.onload=function(){
-    const s2=document.createElement('script');
-    s2.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js';
-    s2.onload=initFirebase;
-    s2.onerror=function(){updateSyncStatus('offline');};
-    document.head.appendChild(s2);
-  };
-  s1.onerror=function(){updateSyncStatus('offline');};
-  document.head.appendChild(s1);
-}
-
-window.addEventListener('load',loadFirebase);
+// Firebase init - delayed so PIN works first
+window.addEventListener('load',function(){
+  setTimeout(function(){
+    try{
+      const s1=document.createElement('script');
+      s1.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js';
+      s1.onload=function(){
+        const s2=document.createElement('script');
+        s2.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js';
+        s2.onload=function(){
+          try{
+            firebase.initializeApp(_fbConfig);
+            _db=firebase.database();
+            _db.ref('.info/connected').on('value',snap=>{updateSyncStatus(snap.val()===true?'saved':'offline');});
+            updateSyncStatus('syncing');
+            _db.ref('ksw_stock').once('value').then(snap=>{
+              const val=snap.val();
+              if(val&&val.data){
+                data=val.data;txLog=val.txLog||[];
+                history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
+                nid=val.nid||nid;if(val.settings)settings=val.settings;
+                try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+                updateSyncStatus('saved');render();
+              }else{autoSave();updateSyncStatus('saved');}
+            }).catch(()=>updateSyncStatus('offline'));
+            let _lastSync=Date.now();
+            _db.ref('ksw_stock/lastUpdated').on('value',snap=>{
+              const t=snap.val();
+              if(t&&t>_lastSync){
+                _lastSync=t;
+                _db.ref('ksw_stock').once('value').then(s=>{
+                  const v=s.val();
+                  if(v&&v.data){data=v.data;txLog=v.txLog||[];render();toast('🔄 Updated from another device','ok');}
+                });
+              }
+            });
+          }catch(e){updateSyncStatus('offline');}
+        };
+        document.head.appendChild(s2);
+      };
+      document.head.appendChild(s1);
+    }catch(e){updateSyncStatus('offline');}
+  },1500);
+});
 
 render();
+setTimeout(function(){
+  const overlay=document.getElementById('pinOverlay');
+  if(overlay&&overlay.style.display!=='none'){
+    overlay.style.pointerEvents='all';
+  }
+},100);
 </script>
 </body>
 </html>
