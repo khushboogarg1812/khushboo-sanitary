@@ -195,7 +195,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 
 /* ── PIN LOCK ── */
-.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:all;}
+.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;}
 .pin-box{background:#fff;border-radius:20px;padding:36px 32px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
 .pin-logo{font-size:40px;margin-bottom:10px;}
 .pin-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
@@ -312,8 +312,6 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 </div>
 
 
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script>
 const LOCS={shop:{name:'Shop',dot:'#1A5FA8'},g1:{name:'Godown 1',dot:'#27650C'},g2:{name:'Godown 2',dot:'#7B4700'},g3:{name:'Godown 3',dot:'#3E339A'},g4:{name:'Godown 4',dot:'#0B5E52'}};
 const LKS=['shop','g1','g2','g3','g4'];
@@ -610,7 +608,6 @@ function snapshotCurrent(period){
     locations:{}
   };
   LKS.forEach(k=>{
-    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
@@ -637,8 +634,7 @@ function setLoc(l){
   curLoc=l;
   document.querySelectorAll('.ltb').forEach(b=>b.classList.remove('act'));
   document.getElementById('ltb-'+l).classList.add('act');
-  // When switching to ALL, go to home for performance
-  if(l==='all' && curPage==='stock'){curPage='home';}
+  if(l==='all'&&curPage==='stock'){curPage='home';}
   // Hide Reports & Analytics when not on All
   const repBtn=document.getElementById('nb-reports');
   const anaBtn=document.getElementById('nb-analytics');
@@ -672,31 +668,10 @@ function render(){
 
 // ── HOME ─────────────────────────────────────────────────────────
 function buildHome(){
-  if(!data) return '<div class="card">Loading...</div>';
   let tSV=0,tInv=0,tRev=0,tAl=0,tStk=0;
   LKS.forEach(k=>{if(!data[k])return;data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i)!=='ok').length;});
   const pl=tRev-tInv;
   let h=`<div class="stitle">Khushboo Sanitary World</div><div class="ssub">Complete business overview — all 5 locations</div>`;
-
-  // ── ALERTS FIRST ──────────────────────────────────────────────
-  let allAlerts=[];
-  LKS.forEach(k=>{
-    if(!data[k])return;
-    sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{
-      allAlerts.push({loc:k,item:i,s:st(i)});
-    });
-  });
-  allAlerts.sort((a,b)=>{if(a.item.qty===0&&b.item.qty!==0)return -1;if(b.item.qty===0&&a.item.qty!==0)return 1;return a.item.qty-b.item.qty;});
-
-  if(allAlerts.length){
-    h+='<div class="card"><div class="ctitle"><i class="fa-solid fa-triangle-exclamation"></i>Stock Alerts ('+allAlerts.length+')</div>';
-    allAlerts.forEach(({loc,item:i,s})=>{
-      h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[loc].name}:</b> ${i.name} — <b>${s==='zero'?'⛔ OUT OF STOCK':'only '+i.qty+' left (min: '+i.min+')'}</b></div></div>`;
-    });
-    h+='</div>';
-  }
-
-  // ── METRICS ───────────────────────────────────────────────────
   h+=`<div class="metrics">
     <div class="metric"><div class="mlabel">📦 Total Stock Value</div><div class="mval blue">${fmt(tSV)}</div></div>
     <div class="metric"><div class="mlabel">💰 Monthly Revenue</div><div class="mval green">${fmt(tRev)}</div></div>
@@ -705,30 +680,37 @@ function buildHome(){
     <div class="metric"><div class="mlabel">📊 Total Units</div><div class="mval teal">${fmtN(tStk)}</div></div>
   </div>`;
 
-  // ── LOCATION CARDS ────────────────────────────────────────────
   h+='<div class="loc-overview">';
   LKS.forEach(k=>{
-    if(!data[k])return;
     const items=data[k];
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
     const rev=items.reduce((s,i)=>s+i.revenue,0);
     const ipl=rev-inv;const al=items.filter(i=>st(i)!=='ok').length;
-    h+=`<div class="loc-card" onclick="setLoc('${k}')">
-      <div class="loc-card-head">
-        <span><span style="width:10px;height:10px;border-radius:50%;background:${LOCS[k].dot};display:inline-block;margin-right:6px"></span>${LOCS[k].name}</span>
-        ${al>0?`<span class="badge bcrit">${al} ⚠</span>`:'<span class="badge bok">✓</span>'}
+    h+=`<div class="lcrd" onclick="setLoc('${k}');setPage('stock')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+        <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14px"><span class="ldot" style="background:${LOCS[k].dot}"></span>${LOCS[k].name}</div>
+        ${al>0?`<span class="badge crit">${al} ⚠</span>`:'<span class="badge ok">✓</span>'}
       </div>
-      <div class="loc-stat">Stock value <b>${fmt(sv)}</b></div>
-      <div class="loc-stat">P&L: <b style="color:${ipl>=0?'var(--green)':'var(--red)'}">${ipl>=0?'+':''}${fmt(ipl)}</b></div>
-      <div class="loc-stat" style="color:var(--text2)">${items.length} items</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:3px">Stock value</div>
+      <div style="font-size:19px;font-weight:800;color:var(--blue);margin-bottom:7px">${fmt(sv)}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
+        <span>P&L: <b style="color:${ipl>=0?'var(--green)':'var(--red)'}">${ipl>=0?'+':''}${fmt(ipl)}</b></span>
+        <span>${items.length} items</span>
+      </div>
     </div>`;
   });
+  h+='</div>';
+
+  h+='<div class="card"><div class="ctitle"><i class="fa-solid fa-triangle-exclamation"></i>Stock Alerts</div>';
+  let any=false;
+  LKS.forEach(k=>{sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{any=true;const s=st(i);h+=`<div class="alert ${s==='crit'?'err':'warn'}"><i class="fa-solid fa-${s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><div><b>${LOCS[k].name}:</b> ${i.name} — only <b>${i.qty}</b> left (min: ${i.min})</div></div>`;});});
+  if(!any) h+='<div class="alert ok"><i class="fa-solid fa-circle-check"></i>All locations stocked well — no alerts!</div>';
   h+='</div>';
   return h;
 }
 
-
+// ── STOCK ────────────────────────────────────────────────────────
 function buildStock(){
   // If ALL selected, show location summary cards instead of full tables
   if(curLoc==='all'){
@@ -1791,10 +1773,9 @@ function doImport(){
 
 
 
-// ── FIREBASE SYNC ─────────────────────────────────────────────────
-const firebaseConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
-
-let _fbApp, _db, _syncT=null, _fbOk=false;
+// ── FIREBASE ─────────────────────────────────────────────────────
+const _fbConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
+let _db=null,_syncT=null;
 
 function updateSyncStatus(s){
   const el=document.getElementById('syncStatus');if(!el)return;
@@ -1808,8 +1789,7 @@ function saveData(silent){
   if(!_db){if(!silent)toast('Saved locally','ok');return;}
   updateSyncStatus('syncing');
   _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-    _fbOk=true;updateSyncStatus('saved');
-    if(!silent)toast('Saved to cloud ✓','ok');
+    updateSyncStatus('saved');if(!silent)toast('Saved to cloud ✓','ok');
   }).catch(()=>{updateSyncStatus('offline');if(!silent)toast('Saved locally','ok');});
 }
 
@@ -1819,23 +1799,18 @@ function autoSave(){
   if(_syncT)clearTimeout(_syncT);
   _syncT=setTimeout(()=>{
     _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:Date.now()}).then(()=>{
-      _fbOk=true;updateSyncStatus('saved');
-      try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+      updateSyncStatus('saved');
     }).catch(()=>updateSyncStatus('offline'));
   },2000);
 }
 
-// Init Firebase after page loads
-window.addEventListener('load',function(){
+function initFirebase(){
   try{
-    if(typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
-    _fbApp=firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(_fbConfig);
     _db=firebase.database();
     _db.ref('.info/connected').on('value',snap=>{
-      _fbOk=snap.val()===true;
-      updateSyncStatus(_fbOk?'saved':'offline');
+      updateSyncStatus(snap.val()===true?'saved':'offline');
     });
-    // Load from Firebase
     updateSyncStatus('syncing');
     _db.ref('ksw_stock').once('value').then(snap=>{
       const val=snap.val();
@@ -1844,14 +1819,11 @@ window.addEventListener('load',function(){
         history=val.history||{weekly:{},monthly:{},quarterly:{},yearly:{}};
         nid=val.nid||nid;if(val.settings)settings=val.settings;
         try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
-        _fbOk=true;updateSyncStatus('saved');
-        render();
+        updateSyncStatus('saved');render();
       } else {
-        // First time - push baked data
         autoSave();updateSyncStatus('saved');
       }
-    }).catch(()=>{updateSyncStatus('offline');});
-    // Live sync
+    }).catch(()=>updateSyncStatus('offline'));
     let _lastSync=Date.now();
     _db.ref('ksw_stock/lastUpdated').on('value',snap=>{
       const t=snap.val();
@@ -1866,10 +1838,24 @@ window.addEventListener('load',function(){
   }catch(e){
     console.warn('Firebase error:',e);
     updateSyncStatus('offline');
-    // Still work without Firebase - use localStorage only
-    document.getElementById('syncStatus').innerHTML='<i class="fa-solid fa-hard-drive"></i> Local only';
   }
-});
+}
+
+function loadFirebase(){
+  const s1=document.createElement('script');
+  s1.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js';
+  s1.onload=function(){
+    const s2=document.createElement('script');
+    s2.src='https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js';
+    s2.onload=initFirebase;
+    s2.onerror=function(){updateSyncStatus('offline');};
+    document.head.appendChild(s2);
+  };
+  s1.onerror=function(){updateSyncStatus('offline');};
+  document.head.appendChild(s1);
+}
+
+window.addEventListener('load',loadFirebase);
 
 render();
 </script>
