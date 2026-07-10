@@ -195,7 +195,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 
 /* ── PIN LOCK ── */
-.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:all;}
+.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:none;align-items:center;justify-content:center;pointer-events:all;}
 .pin-box{background:#fff;border-radius:20px;padding:36px 32px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
 .pin-logo{font-size:40px;margin-bottom:10px;}
 .pin-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
@@ -274,7 +274,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
   <div class="hbtns">
     <button class="hbtn" onclick="changePIN()"><i class="fa-solid fa-lock"></i><span>PIN</span></button>
     <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
-    <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
+    
     <button class="hbtn" onclick="saveData()"><i class="fa-solid fa-floppy-disk"></i><span>Save</span></button>
     <button class="hbtn" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
   </div>
@@ -588,10 +588,27 @@ let curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,
 })();
 
 function saveData(silent){
-  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid}));if(!silent)toast('Saved ✓','ok');}
-  catch(e){toast('Could not save!','err');}
+  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+  if(!_db){if(!silent)toast('Saved locally','ok');return;}
+  updateSyncStatus('syncing');
+  const ts=Date.now();
+  window._lastSync=ts;
+  _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:ts}).then(()=>{
+    updateSyncStatus('saved');if(!silent)toast('Saved to cloud ✓','ok');
+  }).catch(()=>{updateSyncStatus('offline');if(!silent)toast('Saved locally','ok');});
 }
-function autoSave(){saveData(true);}
+function autoSave(){
+  try{localStorage.setItem('ksw_v2',JSON.stringify({data,txLog,history,nid,settings}));}catch(e){}
+  if(!_db)return;
+  const ts=Date.now();
+  window._lastSync=ts;
+  if(window._syncT)clearTimeout(window._syncT);
+  window._syncT=setTimeout(()=>{
+    _db.ref('ksw_stock').set({data,txLog,history,nid,settings,lastUpdated:ts}).then(()=>{
+      updateSyncStatus('saved');
+    }).catch(()=>updateSyncStatus('offline'));
+  },2000);
+}
 
 function checkAutoWeek(){
   const wk=getWeekKey();
@@ -836,9 +853,13 @@ function buildStock(){
               <td><span class="badge ${s==='ok'?'ok':s==='low'?'low':'crit'}">${s==='ok'?'✓ Good':s==='low'?'⚠ Low':s==='zero'?'⛔ Out of Stock':'✗ Critical'}</span></td>
               <td style="color:var(--blue);font-weight:700">${fmt(i.cp*i.qty)}</td>
               <td><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                <input class="qin" id="q_${k}_${i.id}" type="number" min="1" value="1"/>
-                <button class="btn green" onclick="adjQ('${k}',${i.id},1)"><i class="fa-solid fa-plus"></i> Add</button>
-                <button class="btn red" onclick="adjQ('${k}',${i.id},-1)" ${i.qty===0?'disabled':''}><i class="fa-solid fa-minus"></i> Ded</button>
+                <div style="display:flex;align-items:center;gap:4px">
+                  <button class="btn" style="width:32px;height:32px;padding:0;font-size:16px" onclick="adjQ('${k}',${i.id},-1)" ${i.qty===0?'disabled':''}><i class="fa-solid fa-minus"></i></button>
+                  <input class="qin" id="q_${k}_${i.id}" type="number" min="1" value="1" style="width:60px;text-align:center;font-weight:700"/>
+                  <button class="btn green" style="width:32px;height:32px;padding:0;font-size:16px" onclick="adjQ('${k}',${i.id},1)"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <button class="btn green" onclick="adjQ('${k}',${i.id},100)"><i class="fa-solid fa-plus"></i> Add</button>
+                <button class="btn red" onclick="adjQ('${k}',${i.id},-100)" ${i.qty===0?'disabled':''}><i class="fa-solid fa-minus"></i> Ded</button>
                 <button class="btn ibtn" onclick="editItem('${k}',${i.id})"><i class="fa-solid fa-pen"></i></button>
                 <button class="btn ibtn" onclick="removeItem('${k}',${i.id})"><i class="fa-solid fa-trash"></i></button>
               </div></td>
@@ -1368,11 +1389,28 @@ function buildLog(){
 const gv=id=>{const e=document.getElementById(id);return e?e.value:'';};
 const sv2=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val;};
 
+function setQ(loc,id,newVal){
+  const item=data[loc].find(i=>i.id===id);if(!item)return;
+  const newQty=Math.max(0,parseInt(newVal)||0);
+  const diff=newQty-item.qty;
+  if(diff===0)return;
+  if(diff>0){item.purchased+=diff;item.wPurchased=(item.wPurchased||0)+diff;txLog.push({loc,type:'Purchase',item:item.name,qty:diff,detail:`Added ${diff} pcs`,date:todayStr(),from:loc,to:loc});}
+  else{txLog.push({loc,type:'Deduct',item:item.name,qty:Math.abs(diff),detail:`Deducted ${Math.abs(diff)} pcs`,date:todayStr(),from:loc,to:loc});}
+  item.qty=newQty;
+  autoSave();
+  // Update display without full re-render
+  const inp=document.getElementById(`q_${loc}_${id}`);
+  if(inp)inp.value=newQty;
+  toast(`${item.name} qty set to ${newQty}`,'ok');
+}
+
 function adjQ(loc,id,dir){
   const inp=document.getElementById(`q_${loc}_${id}`);
-  const qty=Math.max(1,parseInt(inp?inp.value:1)||1);
+  // dir=1/-1 means arrow buttons (always 1), dir=100/-100 means Add/Ded (use input value)
+  const qty=Math.abs(dir)===1?1:Math.max(1,parseInt(inp?inp.value:1)||1);
+  const realDir=dir>0?1:-1;
   const item=data[loc].find(i=>i.id===id);if(!item)return;
-  if(dir>0){item.qty+=qty;item.purchased+=qty;item.wPurchased=(item.wPurchased||0)+qty;txLog.push({loc,type:'Purchase',item:item.name,qty,detail:`Added ${qty} pcs`,date:todayStr(),from:loc,to:loc});}
+  if(realDir>0){item.qty+=qty;item.purchased+=qty;item.wPurchased=(item.wPurchased||0)+qty;txLog.push({loc,type:'Purchase',item:item.name,qty,detail:`Added ${qty} pcs`,date:todayStr(),from:loc,to:loc});}
   else{const t=Math.min(qty,item.qty);item.qty-=t;txLog.push({loc,type:'Deduct',item:item.name,qty:t,detail:`Deducted ${t} pcs`,date:todayStr(),from:loc,to:loc});}
   autoSave();render();
 }
@@ -1453,11 +1491,13 @@ function storePin(p){
 
 function initPin(){
   const overlay = document.getElementById('pinOverlay');
-  // Check if already unlocked this session
+  if(!overlay) return;
   if(sessionStorage.getItem('ksw_unlocked')==='1'){
     overlay.style.display='none'; return;
   }
+  // Show PIN overlay only after JS is fully ready
   overlay.style.display='flex';
+  overlay.style.pointerEvents='all';
 }
 
 function pinPress(d){
@@ -1533,7 +1573,7 @@ function changePIN(){
   document.getElementById('pinOverlay').style.display='flex';
 }
 
-initPin();
+
 
 
 // ── PWA INSTALL ───────────────────────────────────────────────────
@@ -2009,6 +2049,7 @@ window.addEventListener('load',function(){
 });
 
 render();
+initPin();
 setTimeout(function(){
   const overlay=document.getElementById('pinOverlay');
   if(overlay&&overlay.style.display!=='none'){
