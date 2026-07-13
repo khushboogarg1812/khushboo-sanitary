@@ -275,6 +275,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
     <button class="hbtn" onclick="changePIN()"><i class="fa-solid fa-lock"></i><span>PIN</span></button>
     <span id="syncStatus" style="font-size:12px;color:rgba(255,255,255,0.7);display:flex;align-items:center;gap:5px"><i class="fa-solid fa-cloud"></i> Connecting...</span>
     
+    <button class="hbtn" onclick="undoLast()" title="Undo last change"><i class="fa-solid fa-rotate-left"></i><span>Undo</span></button>
     <button class="hbtn" onclick="saveData()"><i class="fa-solid fa-floppy-disk"></i><span>Save</span></button>
     <button class="hbtn" onclick="window.print()"><i class="fa-solid fa-print"></i><span>Print</span></button>
   </div>
@@ -574,7 +575,7 @@ const DEF={
 };
 
 let data,txLog=[],history={weekly:{},monthly:{},quarterly:{},yearly:{}},nid={shop:20,g1:20,g2:20,g3:20,g4:20},settings={globalMinAlert:5,minAlerts:{shop:5,g1:5,g2:2,g3:2,g4:2},showZeroAlert:true,showLowAlert:true,shopName:'Khushboo Sanitary World'};
-let _db=null,_syncT=null,_fbOk=false,_fbConfig={apiKey:'AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U',authDomain:'khushboo-sanitary.firebaseapp.com',databaseURL:'https://khushboo-sanitary-default-rtdb.firebaseio.com',projectId:'khushboo-sanitary',storageBucket:'khushboo-sanitary.firebasestorage.app',messagingSenderId:'986712566065',appId:'1:986712566065:web:33d18352f17982ac78e810'};
+let _undoStack=[],_db=null,_syncT=null,_fbOk=false,_fbConfig={apiKey:'AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U',authDomain:'khushboo-sanitary.firebaseapp.com',databaseURL:'https://khushboo-sanitary-default-rtdb.firebaseio.com',projectId:'khushboo-sanitary',storageBucket:'khushboo-sanitary.firebasestorage.app',messagingSenderId:'986712566065',appId:'1:986712566065:web:33d18352f17982ac78e810'};
 let stockSort='default',curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,curMonthCount=1,stockFilter='All',stockSearch='',stockBrand='All';
 
 (function(){
@@ -1405,6 +1406,7 @@ const sv2=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val;};
 
 function setQ(loc,id,newVal){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
+  saveUndo(`set qty: ${item.name} (was ${item.qty})`); 
   const newQty=parseInt(newVal)||0;
   const diff=newQty-item.qty;
   if(diff===0)return;
@@ -1419,6 +1421,7 @@ function setQ(loc,id,newVal){
 }
 
 function adjQ(loc,id,dir){
+  saveUndo(`qty change: ${(data[loc].find(i=>i.id===id)||{}).name||'item'}`);
   const inp=document.getElementById(`q_${loc}_${id}`);
   // dir=1/-1 means arrow buttons (always 1), dir=100/-100 means Add/Ded (use input value)
   const qty=Math.abs(dir)===1?1:Math.max(1,parseInt(inp?inp.value:1)||1);
@@ -1472,6 +1475,7 @@ function doTransfer(){
 
 function editItem(loc,id){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
+  saveUndo(`edit: ${item.name} qty=${item.qty}`);
   const newName=prompt(`Item name:\nCurrent: ${item.name}`,item.name);
   if(newName&&newName.trim()&&newName.trim()!==item.name) item.name=newName.trim();
   const cp=parseFloat(prompt(`Cost price for "${item.name}"\nCurrent: ₹${item.cp}`));
@@ -1797,6 +1801,7 @@ function previewDeduct(){
 }
 
 function doDeduct(){
+  saveUndo('bulk deduct');
   const items=window._deductItems;const loc=window._deductLoc;
   if(!items||!items.length){toast('Nothing to deduct','warn');return;}
   items.forEach(item=>{
@@ -2098,6 +2103,29 @@ function sortItems(items,loc){
     if(stockSort==='name-asc') return a.name.localeCompare(b.name);
     return 0;
   });
+}
+
+// ── UNDO HISTORY ─────────────────────────────────────────────────
+function saveUndo(desc){
+  _undoStack.push({
+    desc: desc||'Change',
+    time: new Date().toLocaleTimeString('en-IN'),
+    data: JSON.parse(JSON.stringify(data))
+  });
+  if(_undoStack.length>20) _undoStack.shift(); // keep last 20
+}
+
+function undoLast(){
+  if(!_undoStack.length){toast('Nothing to undo','warn');return;}
+  const last=_undoStack.pop();
+  if(confirm(`Undo "${last.desc}" from ${last.time}?`)){
+    data=last.data;
+    autoSave();
+    toast(`Undone: ${last.desc}`,'ok');
+    render();
+  } else {
+    _undoStack.push(last); // put back
+  }
 }
 
 initPin();
