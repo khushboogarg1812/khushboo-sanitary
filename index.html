@@ -195,7 +195,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(
 
 
 /* ── PIN LOCK ── */
-.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:none;align-items:center;justify-content:center;pointer-events:all;}
+.pin-overlay{position:fixed;inset:0;background:var(--blue);z-index:9999;display:flex;align-items:center;justify-content:center;pointer-events:all;}
 .pin-box{background:#fff;border-radius:20px;padding:36px 32px;width:320px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
 .pin-logo{font-size:40px;margin-bottom:10px;}
 .pin-title{font-size:20px;font-weight:800;color:var(--text);margin-bottom:4px;}
@@ -573,8 +573,9 @@ const DEF={
   g4:[],
 };
 
-let data,txLog=[],history={weekly:{},monthly:{},quarterly:{},yearly:{}},nid={shop:20,g1:20,g2:20,g3:20,g4:20},settings={globalMinAlert:5,showZeroAlert:true,showLowAlert:true,shopName:'Khushboo Sanitary World'};
-let curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,curMonthCount=1,stockFilter='All',stockSearch='',stockBrand='All';
+let data,txLog=[],history={weekly:{},monthly:{},quarterly:{},yearly:{}},nid={shop:20,g1:20,g2:20,g3:20,g4:20},settings={globalMinAlert:5,minAlerts:{shop:5,g1:5,g2:2,g3:2,g4:2},showZeroAlert:true,showLowAlert:true,shopName:'Khushboo Sanitary World'};
+let _db=null,_syncT=null,_fbOk=false,_fbConfig={apiKey:'AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U',authDomain:'khushboo-sanitary.firebaseapp.com',databaseURL:'https://khushboo-sanitary-default-rtdb.firebaseio.com',projectId:'khushboo-sanitary',storageBucket:'khushboo-sanitary.firebasestorage.app',messagingSenderId:'986712566065',appId:'1:986712566065:web:33d18352f17982ac78e810'};
+let stockSort='default',curLoc='all',curPage='home',curRep='weekly',curWeek=null,curMonthRange=null,curMonthCount=1,stockFilter='All',stockSearch='',stockBrand='All';
 
 (function(){
   try{
@@ -648,8 +649,8 @@ function toast(msg,type){
   w.appendChild(d);setTimeout(()=>d.remove(),3000);
 }
 
-const st=i=>{if(i.qty===0)return 'zero';if(i.qty<=Math.max(i.min,settings.globalMinAlert)*0.5)return'crit';if(i.qty<=Math.max(i.min,settings.globalMinAlert))return'low';return'ok';};
-const sortItems=items=>[...items].sort((a,b)=>{const o={zero:0,crit:1,low:2,ok:3};return o[st(a)]-o[st(b)];});
+const getLocMin=(loc)=>{if(settings.minAlerts&&settings.minAlerts[loc])return settings.minAlerts[loc];return settings.globalMinAlert||5;};
+const st=(i,loc)=>{if(i.qty===0)return 'zero';const gm=loc?getLocMin(loc):settings.globalMinAlert||5;if(i.qty<=Math.max(i.min,gm)*0.5)return'crit';if(i.qty<=Math.max(i.min,gm))return'low';return'ok';};
 
 function setLoc(l){
   curLoc=l;
@@ -693,7 +694,7 @@ function render(){
 function buildHome(){
   if(!data) return '<div class="card">Loading...</div>';
   let tSV=0,tInv=0,tRev=0,tAl=0,tStk=0;
-  LKS.forEach(k=>{if(!data[k])return;data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i)!=='ok').length;});
+  LKS.forEach(k=>{if(!data[k])return;data[k].forEach(i=>{tSV+=i.cp*i.qty;tInv+=i.cp*i.purchased;tRev+=i.revenue;tStk+=i.qty;});tAl+=data[k].filter(i=>st(i,k)!=='ok').length;});
   const pl=tRev-tInv;
   let h=`<div class="stitle">Khushboo Sanitary World</div><div class="ssub">Complete business overview — all 5 locations</div>`;
 
@@ -701,8 +702,8 @@ function buildHome(){
   let allAlerts=[];
   LKS.forEach(k=>{
     if(!data[k])return;
-    sortItems(data[k]).filter(i=>st(i)!=='ok').forEach(i=>{
-      allAlerts.push({loc:k,item:i,s:st(i)});
+    sortItems(data[k]).filter(i=>st(i,k)!=='ok').forEach(i=>{
+      allAlerts.push({loc:k,item:i,s:st(i,k)});
     });
   });
   allAlerts.sort((a,b)=>{if(a.item.qty===0&&b.item.qty!==0)return -1;if(b.item.qty===0&&a.item.qty!==0)return 1;return a.item.qty-b.item.qty;});
@@ -732,7 +733,7 @@ function buildHome(){
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
     const inv=items.reduce((s,i)=>s+i.cp*i.purchased,0);
     const rev=items.reduce((s,i)=>s+i.revenue,0);
-    const ipl=rev-inv;const al=items.filter(i=>st(i)!=='ok').length;
+    const ipl=rev-inv;const al=items.filter(i=>st(i,k)!=='ok').length;
     h+=`<div class="loc-card" onclick="setLoc('${k}')">
       <div class="loc-card-head">
         <span><span style="width:10px;height:10px;border-radius:50%;background:${LOCS[k].dot};display:inline-block;margin-right:6px"></span>${LOCS[k].name}</span>
@@ -756,7 +757,7 @@ function buildStock(){
     LKS.forEach(k=>{
       const items=data[k];
       const sorted=sortItems(items);
-      const low=items.filter(i=>st(i)!=='ok').length;
+      const low=items.filter(i=>st(i,k)!=='ok').length;
       const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
       h+=`<div class="card" style="cursor:pointer" onclick="setLoc('${k}')">
         <div class="ctitle" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
@@ -764,10 +765,10 @@ function buildStock(){
           <span style="font-size:12px;color:var(--text2);font-weight:400">${items.length} items &nbsp;|&nbsp; Value: <b style="color:var(--blue)">${fmt(sv)}</b> &nbsp;|&nbsp; Alerts: <b style="color:${low>0?'var(--amber)':'var(--green)'}">${low}</b></span>
         </div>`;
       // Show only critical/low items
-      const alerts=sorted.filter(i=>st(i)!=='ok').slice(0,5);
+      const alerts=sorted.filter(i=>st(i,k)!=='ok').slice(0,5);
       if(alerts.length){
         h+=`<div style="margin-bottom:8px">`;
-        alerts.forEach(i=>{const s=st(i);h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}" style="padding:8px 12px;margin-bottom:6px"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><b>${i.name}</b> — ${s==='zero'?'Out of Stock':i.qty+' left'}</div>`;});
+        alerts.forEach(i=>{const s=st(i,k);h+=`<div class="alert ${s==='zero'?'err':s==='crit'?'err':'warn'}" style="padding:8px 12px;margin-bottom:6px"><i class="fa-solid fa-${s==='zero'?'ban':s==='crit'?'circle-xmark':'triangle-exclamation'}"></i><b>${i.name}</b> — ${s==='zero'?'Out of Stock':i.qty+' left'}</div>`;});
         h+=`</div>`;
       } else {
         h+=`<div class="alert ok" style="margin-bottom:8px"><i class="fa-solid fa-circle-check"></i>All items stocked well</div>`;
@@ -783,7 +784,7 @@ function buildStock(){
   // Gather all items for filter generation
   const allLksForFilter=curLoc==='all'?LKS:[curLoc];
   const brandSet=new Set(['All']);
-  const typeOrder=['All','Elbow','Socket','Tee','Y-Tee','Band','Ball','P-Trap','Trap','Union','Bush','Reducer','Cap','Cowl','FTA','MTA','Valve','Nipple','Clamp','Solvent','Bypass'];
+  const typeOrder=['All','Elbow','Socket','Tee','Y-Tee','Band','Ball','P-Trap','Trap','Union','Bush','Reducer','Cap','Cowl','FTA','MTA','Valve','Nipple','Clamp','Solvent','Bypass','Sink','Main Hole','Ladder','Washbasin','Cistern','Tap','Mixer','Shower','Basin','Flush','Seat','Pipe','Tank'];
   const typeSet=new Set(['All']);
   allLksForFilter.forEach(k=>{
     data[k].forEach(i=>{
@@ -791,6 +792,8 @@ function buildStock(){
       typeOrder.forEach(kw=>{
         if(i.name.toLowerCase().includes(kw.toLowerCase())) typeSet.add(kw);
       });
+      // Also add category as a type filter
+      if(i.cat&&i.cat!=='Fittings'&&i.cat!=='Pipes'&&i.cat!=='Accessories') typeSet.add(i.cat);
     });
   });
   const brands=[...brandSet];
@@ -830,13 +833,24 @@ function buildStock(){
   });
   h+=`</div>`;
 
+  // Sort options
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:var(--text2)">SORT:</span>
+    <button class="filter-pill ${stockSort==='default'?'act':''}" onclick="stockSort='default';render()">Default</button>
+    <button class="filter-pill ${stockSort==='size-asc'?'act':''}" onclick="stockSort='size-asc';render()">Size ↑</button>
+    <button class="filter-pill ${stockSort==='size-desc'?'act':''}" onclick="stockSort='size-desc';render()">Size ↓</button>
+    <button class="filter-pill ${stockSort==='qty-asc'?'act':''}" onclick="stockSort='qty-asc';render()">Qty ↑</button>
+    <button class="filter-pill ${stockSort==='qty-desc'?'act':''}" onclick="stockSort='qty-desc';render()">Qty ↓</button>
+    <button class="filter-pill ${stockSort==='name-asc'?'act':''}" onclick="stockSort='name-asc';render()">Name A→Z</button>
+  </div>`;
+
   lks.forEach(k=>{
     let items=sortItems(data[k]);
     if(stockBrand!=='All') items=items.filter(i=>i.brand===stockBrand);
-    if(stockFilter!=='All') items=items.filter(i=>i.name.toLowerCase().includes(stockFilter.toLowerCase()));
+    if(stockFilter!=='All') items=items.filter(i=>i.name.toLowerCase().includes(stockFilter.toLowerCase())||(i.cat&&i.cat.toLowerCase()===stockFilter.toLowerCase()));
     if(stockSearch){const q=stockSearch.toLowerCase();items=items.filter(i=>i.name.toLowerCase().includes(q)||i.brand.toLowerCase().includes(q)||(i.cat&&i.cat.toLowerCase().includes(q)));}
     const sv=items.reduce((s,i)=>s+i.cp*i.qty,0);
-    const low=items.filter(i=>st(i)!=='ok').length;
+    const low=items.filter(i=>st(i,k)!=='ok').length;
     h+=`<div class="card">
       <div class="ctitle" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
         <span><span class="ldot" style="background:${LOCS[k].dot};display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle"></span>${LOCS[k].name}</span>
@@ -846,7 +860,7 @@ function buildStock(){
         <table class="tbl">
           <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Status</th><th>Stock Value</th><th style="min-width:240px">Add / Deduct</th></tr></thead>
           <tbody>
-            ${items.map((i,idx)=>{const s=st(i);return `<tr class="row-${s==='ok'?'ok':s}">
+            ${items.map((i,idx)=>{const s=st(i,k);return `<tr class="row-${s==='ok'?'ok':s}">
               <td style="color:var(--text3);font-size:12px">${idx+1}</td>
               <td><b style="font-size:13.5px">${i.name}</b><span class="cat-pill" style="background:${CP[i.cat]||'#eee'};color:${CT[i.cat]||'#333'}">${i.cat}</span></td>
               <td><span class="qnum">${i.qty}</span></td>
@@ -854,12 +868,12 @@ function buildStock(){
               <td style="color:var(--blue);font-weight:700">${fmt(i.cp*i.qty)}</td>
               <td><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
                 <div style="display:flex;align-items:center;gap:4px">
-                  <button class="btn" style="width:32px;height:32px;padding:0;font-size:16px" onclick="adjQ('${k}',${i.id},-1)" ${i.qty===0?'disabled':''}><i class="fa-solid fa-minus"></i></button>
+                  <button class="btn" style="width:32px;height:32px;padding:0;font-size:16px" onclick="adjQ('${k}',${i.id},-1)"><i class="fa-solid fa-minus"></i></button>
                   <input class="qin" id="q_${k}_${i.id}" type="number" min="1" value="1" style="width:60px;text-align:center;font-weight:700"/>
                   <button class="btn green" style="width:32px;height:32px;padding:0;font-size:16px" onclick="adjQ('${k}',${i.id},1)"><i class="fa-solid fa-plus"></i></button>
                 </div>
                 <button class="btn green" onclick="adjQ('${k}',${i.id},100)"><i class="fa-solid fa-plus"></i> Add</button>
-                <button class="btn red" onclick="adjQ('${k}',${i.id},-100)" ${i.qty===0?'disabled':''}><i class="fa-solid fa-minus"></i> Ded</button>
+                <button class="btn red" onclick="adjQ('${k}',${i.id},-100)"><i class="fa-solid fa-minus"></i> Ded</button>
                 <button class="btn ibtn" onclick="editItem('${k}',${i.id})"><i class="fa-solid fa-pen"></i></button>
                 <button class="btn ibtn" onclick="removeItem('${k}',${i.id})"><i class="fa-solid fa-trash"></i></button>
               </div></td>
@@ -1391,7 +1405,7 @@ const sv2=(id,val)=>{const e=document.getElementById(id);if(e)e.value=val;};
 
 function setQ(loc,id,newVal){
   const item=data[loc].find(i=>i.id===id);if(!item)return;
-  const newQty=Math.max(0,parseInt(newVal)||0);
+  const newQty=parseInt(newVal)||0;
   const diff=newQty-item.qty;
   if(diff===0)return;
   if(diff>0){item.purchased+=diff;item.wPurchased=(item.wPurchased||0)+diff;txLog.push({loc,type:'Purchase',item:item.name,qty:diff,detail:`Added ${diff} pcs`,date:todayStr(),from:loc,to:loc});}
@@ -1411,7 +1425,7 @@ function adjQ(loc,id,dir){
   const realDir=dir>0?1:-1;
   const item=data[loc].find(i=>i.id===id);if(!item)return;
   if(realDir>0){item.qty+=qty;item.purchased+=qty;item.wPurchased=(item.wPurchased||0)+qty;txLog.push({loc,type:'Purchase',item:item.name,qty,detail:`Added ${qty} pcs`,date:todayStr(),from:loc,to:loc});}
-  else{const t=Math.min(qty,item.qty);item.qty-=t;txLog.push({loc,type:'Deduct',item:item.name,qty:t,detail:`Deducted ${t} pcs`,date:todayStr(),from:loc,to:loc});}
+  else{const t=qty;item.qty-=t;txLog.push({loc,type:'Deduct',item:item.name,qty:t,detail:`Deducted ${t} pcs`,date:todayStr(),from:loc,to:loc});}
   autoSave();render();
 }
 
@@ -1495,7 +1509,7 @@ function initPin(){
   if(sessionStorage.getItem('ksw_unlocked')==='1'){
     overlay.style.display='none'; return;
   }
-  // Show PIN overlay only after JS is fully ready
+  // Already visible from CSS - just ensure pointer events work
   overlay.style.display='flex';
   overlay.style.pointerEvents='all';
 }
@@ -1607,9 +1621,14 @@ function buildSettings(){
     <div class="alert info" style="margin-bottom:14px"><i class="fa-solid fa-circle-info"></i>These settings control when items appear in your alert list. Each item also has its own minimum — the higher value is used.</div>
 
     <div class="fg">
-      <label>Global minimum alert quantity — show alert when any item falls below this number</label>
+      <label>Global minimum alert quantity (default for all godowns)</label>
       <input id="sGlobalMin" type="number" min="0" value="${settings.globalMinAlert}" style="max-width:120px"/>
-      <span style="font-size:12px;color:var(--text2);margin-top:4px">Currently: if qty ≤ <strong>${settings.globalMinAlert}</strong>, alert shows. Set to 0 to use each item's own minimum only.</span>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:8px">Per-Godown Minimum Alert Quantity</label>
+      <div class="r3">
+        ${LKS.map(k=>`<div class="fg" style="margin-bottom:0"><label style="font-size:11px">${LOCS[k].name}</label><input id="sMin_${k}" type="number" min="0" value="${(settings.minAlerts&&settings.minAlerts[k])||settings.globalMinAlert||5}" style="text-align:center"/></div>`).join('')}
+      </div>
     </div>
 
     <div class="fg" style="margin-bottom:0">
@@ -1651,7 +1670,9 @@ function saveSettings(){
   const showZero = document.getElementById('sZero').checked;
   const showLow = document.getElementById('sLow').checked;
   const shopName = document.getElementById('sShopName').value.trim()||'Khushboo Sanitary World';
-  settings = {globalMinAlert:globalMin, showZeroAlert:showZero, showLowAlert:showLow, shopName};
+  const minAlerts={};
+  LKS.forEach(k=>{const el=document.getElementById('sMin_'+k);if(el)minAlerts[k]=parseInt(el.value)||globalMin;});
+  settings = {globalMinAlert:globalMin, minAlerts, showZeroAlert:showZero, showLowAlert:showLow, shopName};
   autoSave();
   // Update brand name in header
   document.querySelector('.brand-name').textContent = shopName;
@@ -1915,7 +1936,6 @@ function doImport(){
 // ── FIREBASE SYNC ─────────────────────────────────────────────────
 const firebaseConfig={apiKey:"AIzaSyDccReyEHnE3nA9CURWYwpBZX06nbFvI5U",authDomain:"khushboo-sanitary.firebaseapp.com",databaseURL:"https://khushboo-sanitary-default-rtdb.firebaseio.com",projectId:"khushboo-sanitary",storageBucket:"khushboo-sanitary.firebasestorage.app",messagingSenderId:"986712566065",appId:"1:986712566065:web:33d18352f17982ac78e810"};
 
-let _fbApp, _db, _syncT=null, _fbOk=false;
 
 function updateSyncStatus(s){
   const el=document.getElementById('syncStatus');if(!el)return;
@@ -2048,8 +2068,40 @@ window.addEventListener('load',function(){
   },1500);
 });
 
-render();
+const SIZE_ORDER=['½"','¾"','1"','1¼"','1½"','2"','2½"','3"','3½"','4"','5"','6"','8"','10"','12"','25mm','32mm','40mm','50mm','63mm','75mm','80mm','100mm','110mm'];
+function getSizeRank(name){
+  let sizeRank=999;
+  for(let i=0;i<SIZE_ORDER.length;i++){
+    if(name.includes(SIZE_ORDER[i])){sizeRank=i;break;}
+  }
+  // Weight group first: 4kg=0, no weight=1, 6kg=2
+  let weightRank=1;
+  if(name.includes('4kg'))weightRank=0;
+  else if(name.includes('6kg'))weightRank=2;
+  // Weight is primary, size is secondary: all 4kg first, then 6kg
+  return weightRank*1000+sizeRank;
+}
+function sortItems(items,loc){
+  const statusOrder={zero:0,crit:1,low:2,ok:3};
+  return [...items].sort((a,b)=>{
+    // Always put alerts first unless custom sort
+    if(stockSort==='default'||!stockSort){
+      const sa=statusOrder[st(a,loc)||'ok']||3;
+      const sb=statusOrder[st(b,loc)||'ok']||3;
+      if(sa!==sb)return sa-sb;
+      return getSizeRank(a.name)-getSizeRank(b.name);
+    }
+    if(stockSort==='size-asc') return getSizeRank(a.name)-getSizeRank(b.name);
+    if(stockSort==='size-desc') return getSizeRank(b.name)-getSizeRank(a.name);
+    if(stockSort==='qty-asc') return a.qty-b.qty;
+    if(stockSort==='qty-desc') return b.qty-a.qty;
+    if(stockSort==='name-asc') return a.name.localeCompare(b.name);
+    return 0;
+  });
+}
+
 initPin();
+render();
 setTimeout(function(){
   const overlay=document.getElementById('pinOverlay');
   if(overlay&&overlay.style.display!=='none'){
